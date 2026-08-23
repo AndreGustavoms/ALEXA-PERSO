@@ -2,11 +2,19 @@ Option Explicit
 
 Dim shell, fileSystem, processEnvironment, projectDirectory, pythonwPath, venvPythonPath
 Dim runtimePath, modelPath, buildPath, runtimeCommand, configPath, configFile, configLine, basePythonHome, candidatePythonw
+Dim updateScript, updateCommand
 
 Set shell = CreateObject("WScript.Shell")
 Set fileSystem = CreateObject("Scripting.FileSystemObject")
 
 projectDirectory = fileSystem.GetParentFolderName(WScript.ScriptFullName)
+updateScript = fileSystem.BuildPath(projectDirectory, "scripts\update-assistant.ps1")
+
+If fileSystem.FileExists(updateScript) Then
+  updateCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & updateScript & Chr(34) & " -Silent"
+  shell.Run updateCommand, 0, True
+End If
+
 pythonwPath = fileSystem.BuildPath(projectDirectory, ".venv\Scripts\pythonw.exe")
 venvPythonPath = fileSystem.BuildPath(projectDirectory, ".venv\Scripts\python.exe")
 runtimePath = fileSystem.BuildPath(projectDirectory, "assistant_runtime\main.py")

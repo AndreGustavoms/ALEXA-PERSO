@@ -71,10 +71,9 @@ class IntentParserTests(unittest.TestCase):
         self.assertEqual(typed.spec.id, "keyboard.type_text")  # type: ignore[union-attr]
         self.assertEqual(typed.parameters["text"], "meu nome aqui")  # type: ignore[union-attr]
 
-    def test_accepts_doktor_and_legacy_wake_prefixes(self) -> None:
+    def test_accepts_doktor_wake_prefixes(self) -> None:
         self.assert_intent("Olá, Doktor, abra o YouTube", "browser.open_site")
         self.assert_intent("Olá, doutor, abra o YouTube", "browser.open_site")
-        self.assert_intent("Olá, assistente, abra o YouTube", "browser.open_site")
 
     def test_context_changes_what_close_this_means(self) -> None:
         browser = self.parser.parse("fecha aqui", self.browser)

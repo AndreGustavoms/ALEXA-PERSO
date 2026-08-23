@@ -4,7 +4,7 @@ import re
 import unicodedata
 
 WAKE_PREFIX = re.compile(
-    r"^(?:(?:ola|oi|ei)\s+)?(?:doktor|doutor|assistente)[,:]?\s+"
+    r"^(?:(?:ola)\s+)?(?:doktor|doutor)[,:]?\s+"
 )
 POLITE_SUFFIX = re.compile(
     r"\s+(?:por favor|para mim|pra mim|se puder|por gentileza)$"

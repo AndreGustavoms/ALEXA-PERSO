@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#2F80FF"/>
+    <stop offset="0.55" stop-color="#1557E8"/>
+    <stop offset="1" stop-color="#0D3EBB"/>
+  </linearGradient>
+</defs>
+<!-- Exclamation stem -->
+<path fill="url(#g)" d="M96 96h76v224H96z"/>
+<!-- Exclamation dot -->
+<rect fill="url(#g)" x="96" y="344" width="76" height="72" rx="6"/>
+<!-- D bowl, deliberately separated from the stem -->
+<path fill="url(#g)" fill-rule="evenodd"
+ d="M198 96h86c88 0 156 66 156 160s-68 160-156 160h-86v-72h84c48 0 82-36 82-88s-34-88-82-88h-84z"/>
+</svg>

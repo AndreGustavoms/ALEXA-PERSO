@@ -21,7 +21,7 @@ icone da bandeja do sistema.
 4. Depois que a fala comeca, nao existe limite de duracao.
 5. Dois segundos de silencio continuo encerram o comando.
 
-A frase anterior, `Ola, assistente`, continua aceita como alias de compatibilidade.
+Somente a frase de ativacao `Ola, Doktor` abre a escuta de comandos.
 
 Na primeira abertura, selecione `Autorizar comandos`, leia o termo local e
 marque a confirmacao. A autorizacao fica salva somente neste computador e pode
@@ -48,9 +48,12 @@ a interface, pausar a escuta, ativar ou desativar o inicio com o Windows e
 encerrar completamente.
 
 O inicializador mantem somente um processo permanente do assistente. Abrir o
-atalho novamente apenas mostra a interface existente. Instalacoes e atualizacoes
-pedem ao icone da bandeja para encerrar de forma graciosa antes de iniciar a
-nova versao, evitando processos e icones duplicados.
+atalho novamente apenas mostra a interface existente. A cada 24 horas ele
+verifica a branch `main` do GitHub e atualiza o aplicativo automaticamente,
+preservando modelo, permissoes e configuracoes locais.
+
+Para atualizar imediatamente, execute `ATUALIZAR_ASSISTENTE.cmd`. O instalador
+continua disponivel para uma instalacao inicial feita a partir do ZIP do GitHub.
 
 O atalho da area de trabalho e `INICIAR_ASSISTENTE.cmd` abrem a interface em
 uma janela local do Chrome ou Edge. A pagina tambem fica disponivel em

@@ -47,10 +47,6 @@ APP_NAME = "Doktor Assistant"
 WAKE_PHRASE = "Olá, Doktor"
 WAKE_VARIANTS = (
     "ola doutor",
-    "oi doutor",
-    "ei doutor",
-    "ola assistente",
-    "ei assistente",
 )
 WEB_PORT = 3000
 WEB_URL = f"http://localhost:{WEB_PORT}/"
