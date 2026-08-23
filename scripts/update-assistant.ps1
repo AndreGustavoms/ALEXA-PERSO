@@ -29,7 +29,7 @@ function Save-UpdateState([string]$sha) {
 function Stop-Assistant {
   $pythonPath = Join-Path $projectDirectory '.venv\Scripts\python.exe'
   $runtimePath = Join-Path $projectDirectory 'assistant_runtime\main.py'
-  if (Test-Path -LiteralPath $pythonPath -and Test-Path -LiteralPath $runtimePath) {
+  if ((Test-Path -LiteralPath $pythonPath) -and (Test-Path -LiteralPath $runtimePath)) {
     & $pythonPath $runtimePath --stop | Out-Null
   }
 
