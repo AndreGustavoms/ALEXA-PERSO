@@ -121,6 +121,14 @@ class IntentParserTests(unittest.TestCase):
         )
         self.assertEqual(volume.parameters["value"], 50)  # type: ignore[union-attr]
 
+    def test_recovers_valorant_from_common_vosk_transcription(self) -> None:
+        for phrase in ("abre o valor antes", "abrir valor ante", "inicia valora antes"):
+            with self.subTest(phrase=phrase):
+                intent = self.parser.parse(phrase, self.application)
+                self.assertIsNotNone(intent)
+                self.assertEqual(intent.spec.id, "application.open")  # type: ignore[union-attr]
+                self.assertEqual(intent.parameters["application"], "valorant")  # type: ignore[union-attr]
+
 
 if __name__ == "__main__":
     unittest.main()

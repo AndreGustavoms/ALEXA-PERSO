@@ -1,6 +1,7 @@
 import os
 import time
 import unittest
+from unittest import mock
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -177,6 +178,24 @@ class CommandExecutorTests(unittest.TestCase):
             "browser.close_tab",
             "browser.open_site",
         ])
+
+    def test_launches_valorant_through_riot_client(self) -> None:
+        with mock.patch.object(
+            self.executor.actions.apps,
+            "resolve",
+            return_value=("Valorant", (r"C:\Riot Games\Riot Client\RiotClientServices.exe",)),
+        ):
+            result = self.executor.execute("abre o valor antes", authorized=True)
+
+        self.assertTrue(result.executed)
+        self.assertEqual(
+            self.programs[-1],
+            (
+                r"C:\Riot Games\Riot Client\RiotClientServices.exe",
+                "--launch-product=valorant",
+                "--launch-patchline=live",
+            ),
+        )
 
     def test_never_partially_executes_unrecognized_compound_command(self) -> None:
         result = self.executor.execute(

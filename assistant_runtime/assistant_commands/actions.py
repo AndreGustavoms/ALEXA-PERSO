@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import logging
 import os
 import re
@@ -221,7 +222,20 @@ class ApplicationResolver:
             "Code.exe": (
                 local_app_data / "Programs/Microsoft VS Code/Code.exe",
             ),
+            "RiotClientServices.exe": (
+                local_app_data / "Riot Games/Riot Client/RiotClientServices.exe",
+                Path(os.environ.get("SYSTEMDRIVE", "C:")) / "Riot Games/Riot Client/RiotClientServices.exe",
+            ),
         }
+        if executable == "RiotClientServices.exe":
+            manifest = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData")) / "Riot Games/RiotClientInstalls.json"
+            try:
+                payload = json.loads(manifest.read_text(encoding="utf-8"))
+                configured = Path(str(payload.get("rc_live") or payload.get("rc_default") or ""))
+                if configured.is_file():
+                    return str(configured)
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                pass
         for candidate in fallbacks.get(executable, ()):
             if candidate.exists():
                 return str(candidate)
@@ -332,7 +346,15 @@ class WindowsActions:
         if isinstance(target, str):
             self.resource_opener(target)
         else:
-            if requested == "discord" and target[0].lower().endswith("update.exe"):
+            if normalize_text(requested) == "valorant":
+                self.program_starter(
+                    (
+                        target[0],
+                        "--launch-product=valorant",
+                        "--launch-patchline=live",
+                    )
+                )
+            elif requested == "discord" and target[0].lower().endswith("update.exe"):
                 self.program_starter((target[0], "--processStart", "Discord.exe"))
             else:
                 self.program_starter(target)

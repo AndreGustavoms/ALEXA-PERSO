@@ -56,6 +56,17 @@ OPEN_WORDS = r"(?:abre|abra|abrir|inicia|inicie|iniciar|entra|entre|entrar|acess
 CLOSE_WORDS = r"(?:fecha|feche|fechar|encerra|encerre|encerrar)"
 SEARCH_WORDS = r"(?:pesquisa|pesquise|pesquisar|procura|procure|procurar|busca|busque|buscar)"
 
+APPLICATION_SPEECH_ALIASES = {
+    "valor antes": "valorant",
+    "valor ante": "valorant",
+    "valora antes": "valorant",
+}
+
+
+def normalize_application_name(value: str) -> str:
+    name = value.strip()
+    return APPLICATION_SPEECH_ALIASES.get(name, name)
+
 
 class IntentParser:
     def __init__(self, commands: tuple[CommandSpec, ...] = COMMANDS) -> None:
@@ -296,7 +307,7 @@ class IntentParser:
             "janela atual", "programa atual", "aplicativo atual",
         }
         if close_app and close_app.group(1) not in contextual_targets:
-            app = close_app.group(1).strip()
+            app = normalize_application_name(close_app.group(1))
             if app in {"navegador", "browser"} and context and context.kind == "browser":
                 app = context.application or context.process_name.removesuffix(".exe")
             return self._dynamic("application.close", f"Fechar {app}", "Aplicativos", "close_application", {"application": app}, f"Fechei {app}.", risk="confirmation_required", confirmation=f"Quer mesmo fechar {app}? Isso pode descartar trabalho nao salvo.")
@@ -323,7 +334,7 @@ class IntentParser:
 
         open_app = re.fullmatch(rf"{OPEN_WORDS} (?:o |a |os |as |um |uma |no |na )?(?:aplicativo |programa )?(.+)", text)
         if open_app:
-            app = open_app.group(1).strip()
+            app = normalize_application_name(open_app.group(1))
             return self._dynamic("application.open", f"Abrir {app}", "Aplicativos", "open_application", {"application": app}, f"Abri {app}.")
         return None
 
