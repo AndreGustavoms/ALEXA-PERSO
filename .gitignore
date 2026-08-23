@@ -11,7 +11,7 @@
 # testing
 /coverage
 
-# next.js
+# build caches
 /.next/
 /.vinext/
 /out/
@@ -29,10 +29,16 @@ yarn-error.log*
 # local environment
 .env*
 
-# deployment and generated files
+# generated files
 .vercel
 next-env.d.ts
 /dist/
 /.wrangler/
 /outputs/
 /work/
+/.venv/
+/runtime/models/
+/runtime/logs/
+/runtime/config/
+__pycache__/
+*.py[cod]

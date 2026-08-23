@@ -12,11 +12,11 @@ export function createAssistantReply(transcript: string) {
   const normalizedTranscript = normalizeText(cleanTranscript);
 
   if (/\b(oi|ola|bom dia|boa tarde|boa noite)\b/.test(normalizedTranscript)) {
-    return 'Olá! Que bom falar com você. Como posso ajudar durante sua visita?';
+    return 'Olá! Que bom falar com você. Como posso ajudar?';
   }
 
   if (/\b(ajuda|o que voce faz|como funciona)\b/.test(normalizedTranscript)) {
-    return 'Nesta primeira versão, eu reconheço sua fala e respondo em voz alta. Depois, posso ser conectado ao conteúdo e aos serviços do site.';
+    return 'No modo local, posso executar comandos registrados. Abra o aplicativo em segundo plano para usar ações do Windows.';
   }
 
   if (/\b(obrigado|obrigada|valeu)\b/.test(normalizedTranscript)) {
@@ -25,5 +25,5 @@ export function createAssistantReply(transcript: string) {
 
   const safeTranscript = cleanTranscript.slice(0, MAX_TRANSCRIPT_LENGTH);
 
-  return `Entendi. Você disse: ${safeTranscript}. Esta é uma resposta inicial do assistente.`;
+  return `Ouvi: ${safeTranscript}. O executor de comandos locais não está conectado neste modo.`;
 }
