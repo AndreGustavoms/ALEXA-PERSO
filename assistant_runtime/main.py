@@ -506,6 +506,13 @@ class AssistantRuntime:
             self.speech_engine = None
             raise
 
+    def speak_feedback(self, text: str) -> None:
+        """Short phase feedback; failures must never stop microphone capture."""
+        try:
+            self.speak(text)
+        except Exception:
+            logging.exception("Falha no feedback de voz: %s", text)
+
     def complete_command(
         self, transcript: str, audio_queue: queue.Queue[bytes]
     ) -> None:
@@ -643,17 +650,18 @@ class AssistantRuntime:
                     continue
 
                 if command_recognizer is None:
-                    if wake_recognizer.AcceptWaveform(data):
-                        candidate = self.extract_result(wake_recognizer.Result())
-                    else:
-                        candidate = self.extract_result(
-                            wake_recognizer.PartialResult(), "partial"
-                        )
+                    # Wait for a final Vosk result so the wake word does not
+                    # consume the first words of the actual command.
+                    if not wake_recognizer.AcceptWaveform(data):
+                        continue
+                    candidate = self.extract_result(wake_recognizer.Result())
 
                     if not self.contains_wake_phrase(candidate):
                         continue
 
                     self.play_activation_sound()
+                    self.update_state(error="", mode="activated", partial="")
+                    self.speak_feedback("Sim, pode falar.")
                     self.drain_audio(audio_queue)
                     command_recognizer = self.create_recognizer(
                         model, sample_rate, wake=False
@@ -711,6 +719,8 @@ class AssistantRuntime:
                     voice_config.speech_end_silence,
                 )
                 if command_text:
+                    self.speak_feedback("Entendi, processando.")
+                    self.drain_audio(audio_queue)
                     self.complete_command(command_text, audio_queue)
                 else:
                     self.drain_audio(audio_queue)
