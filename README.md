@@ -32,7 +32,7 @@ GitHub CLI autenticado para permitir atualizacoes sem Git.
 2. Aguarde o sinal sonoro.
 3. Comece a falar em ate sete segundos.
 4. Depois que a fala comeca, nao existe limite de duracao.
-5. Dois segundos de silencio continuo encerram o comando.
+5. Cerca de um segundo de silencio continuo encerra o comando.
 
 Somente a frase de ativacao `Ola, Doktor` abre a escuta de comandos.
 
@@ -103,10 +103,10 @@ Os valores ficam centralizados em `assistant_runtime/voice_config.json`:
 ```json
 {
   "activation_start_timeout": 7.0,
-  "speech_end_silence": 2.0,
+  "speech_end_silence": 0.9,
   "minimum_speech_duration": 0.24,
   "maximum_phrase_duration": null,
-  "vad_aggressiveness": 2
+  "vad_aggressiveness": 3
 }
 ```
 

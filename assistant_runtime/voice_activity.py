@@ -13,12 +13,12 @@ import webrtcvad
 @dataclass(frozen=True)
 class VoiceActivityConfig:
     activation_start_timeout: float = 7.0
-    speech_end_silence: float = 2.0
+    speech_end_silence: float = 0.9
     minimum_speech_duration: float = 0.24
     maximum_phrase_duration: None = None
     sample_rate: int = 16_000
     frame_duration_ms: int = 30
-    vad_aggressiveness: int = 2
+    vad_aggressiveness: int = 3
 
     def __post_init__(self) -> None:
         if not 1.0 <= self.activation_start_timeout <= 30.0:
