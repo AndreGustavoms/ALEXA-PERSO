@@ -56,30 +56,49 @@ class CommandExecutor:
         self.status_callback = status_callback or (lambda _status: None)
 
     def execute(self, transcript: str, authorized: bool) -> CommandResult:
-        confirmation = self.confirmations.resolve(transcript)
-        if confirmation.state == "cancelled":
+        context = self._safe_context()
+        intents = self.router.parse(
+            transcript,
+            context,
+            previous_target=self.history.last_target(),
+        )
+
+        # A complete command always wins over a pending yes/no question. This
+        # keeps phrases such as "pode fechar o YouTube" executable instead of
+        # accidentally treating "pode" as confirmation.
+        if intents:
+            self.confirmations.discard()
+            confirmation = None
+        else:
+            confirmation = self.confirmations.resolve(transcript)
+
+        if confirmation is None:
+            confirmation_state = "command"
+        else:
+            confirmation_state = confirmation.state
+
+        if confirmation_state == "cancelled":
             return self._simple_result(
                 transcript, "confirmation.cancelled", "Confirmacao cancelada",
                 "Cancelado.", status="cancelled",
             )
-        if confirmation.state == "expired":
+        if confirmation_state == "expired":
             return self._simple_result(
                 transcript, "confirmation.expired", "Confirmacao expirada",
                 "A confirmacao expirou. Diga o comando novamente.", status="expired",
             )
-        if confirmation.state == "waiting":
+        if confirmation_state == "waiting":
             return self._simple_result(
                 transcript, "confirmation.waiting", "Aguardando confirmacao",
                 "Responda sim para confirmar ou nao para cancelar.",
                 status="awaiting_confirmation",
             )
-
-        context = self._safe_context()
-        intents = (
-            (confirmation.intent,)
-            if confirmation.state == "confirmed" and confirmation.intent
-            else self.router.parse(transcript, context)
-        )
+        if (
+            confirmation_state == "confirmed"
+            and confirmation is not None
+            and confirmation.intent
+        ):
+            intents = (confirmation.intent,)
         if not intents:
             self._log(transcript, None, False, "not_matched")
             return CommandResult(False, False, "")
@@ -104,7 +123,7 @@ class CommandExecutor:
 
         if (
             intent.spec.risk == RiskLevel.CONFIRMATION_REQUIRED
-            and confirmation.state != "confirmed"
+            and confirmation_state != "confirmed"
         ):
             self.confirmations.request(intent)
             response = intent.spec.confirmation_prompt or "Quer mesmo fazer isso?"

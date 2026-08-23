@@ -47,3 +47,11 @@ class CommandHistory:
     def snapshot(self) -> list[dict[str, Any]]:
         with self._lock:
             return [asdict(entry) for entry in self._entries]
+
+    def last_target(self) -> str:
+        with self._lock:
+            for entry in reversed(self._entries):
+                target = entry.parameters.get("application") or entry.parameters.get("target")
+                if isinstance(target, str) and target and not target.startswith(("http://", "https://", "ms-settings:", "shell:")):
+                    return target
+        return ""

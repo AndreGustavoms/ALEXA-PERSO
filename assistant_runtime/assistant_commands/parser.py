@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .models import CommandSpec, ParsedIntent, WindowContext
-from .normalization import extract_percent, normalize_text
+from .normalization import extract_percent, normalize_natural_command, normalize_text
 from .registry import COMMANDS, command
 
 WEBSITES = {
@@ -62,10 +63,56 @@ APPLICATION_SPEECH_ALIASES = {
     "valora antes": "valorant",
 }
 
+KNOWN_APPLICATIONS = {
+    "chrome": "chrome",
+    "google chrome": "chrome",
+    "edge": "edge",
+    "microsoft edge": "edge",
+    "firefox": "firefox",
+    "discord": "discord",
+    "whatsapp": "whats app",
+    "whats app": "whats app",
+    "valorant": "valorant",
+    "riot": "riot",
+    "spotify": "spotify",
+    "steam": "steam",
+    "vs code": "vs code",
+    "visual studio code": "visual studio code",
+    "calculadora": "calculadora",
+    "bloco de notas": "bloco de notas",
+    "terminal": "terminal",
+}
+
 
 def normalize_application_name(value: str) -> str:
     name = value.strip()
-    return APPLICATION_SPEECH_ALIASES.get(name, name)
+    name = APPLICATION_SPEECH_ALIASES.get(name, name)
+    return fuzzy_entity(name, KNOWN_APPLICATIONS)
+
+
+def fuzzy_entity(
+    value: str,
+    entities: dict[str, object],
+    threshold: float = 0.82,
+) -> str:
+    if value in entities:
+        resolved = entities[value]
+        return resolved if isinstance(resolved, str) else value
+    if len(value) < 4:
+        return value
+    matches = sorted(
+        (
+            (SequenceMatcher(None, value, candidate).ratio(), candidate)
+            for candidate in entities
+        ),
+        reverse=True,
+    )
+    if not matches or matches[0][0] < threshold:
+        return value
+    if len(matches) > 1 and matches[0][0] - matches[1][0] < 0.08:
+        return value
+    resolved = entities[matches[0][1]]
+    return resolved if isinstance(resolved, str) else matches[0][1]
 
 
 class IntentParser:
@@ -76,8 +123,13 @@ class IntentParser:
             for spec in commands
         )
 
-    def parse(self, transcript: str, context: WindowContext | None = None) -> ParsedIntent | None:
-        text = normalize_text(transcript)
+    def parse(
+        self,
+        transcript: str,
+        context: WindowContext | None = None,
+        previous_target: str = "",
+    ) -> ParsedIntent | None:
+        text = normalize_natural_command(transcript)
         if not text:
             return None
 
@@ -87,7 +139,7 @@ class IntentParser:
                     continue
                 return ParsedIntent(spec, dict(spec.executor_params), 0.96, text)
 
-        parameterized = self._parse_parameterized(text, context)
+        parameterized = self._parse_parameterized(text, context, previous_target)
         if parameterized:
             return ParsedIntent(
                 parameterized.spec,
@@ -96,7 +148,10 @@ class IntentParser:
                 text,
             )
 
-        if re.fullmatch(r"(?:fecha|feche|fechar|encerra|encerrar)", text):
+        if re.fullmatch(r"(?:fecha|feche|fechar)", text):
+            contextual = self._contextual_close(context, previous_target)
+            if contextual:
+                return contextual
             spec = command(
                 "assistant.ambiguous_close",
                 "Escolher o que fechar",
@@ -136,6 +191,7 @@ class IntentParser:
         self,
         text: str,
         context: WindowContext | None,
+        previous_target: str = "",
     ) -> ParsedIntent | None:
         type_text = re.fullmatch(
             r"(?:escreve|escreva|escrever|digita|digite|digitar)"
@@ -253,8 +309,11 @@ class IntentParser:
             rf"{OPEN_WORDS} (?:o |a |no |na )?(?:(?:site|versao web) (?:do |da )?)?(.+)",
             text,
         )
-        if site and site.group(1).strip() in WEBSITES:
-            site_name = site.group(1).strip()
+        if site:
+            site_name = fuzzy_entity(site.group(1).strip(), WEBSITES)
+        else:
+            site_name = ""
+        if site_name in WEBSITES:
             if site_name != "spotify" or re.search(r"\b(?:site|web)\b", text):
                 label, target = WEBSITES[site_name]
                 return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
@@ -283,6 +342,23 @@ class IntentParser:
                 label, target = WEBSITES[site_name]
                 return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
 
+        current_app = re.fullmatch(
+            rf"{CLOSE_WORDS} (?:(?:o|esse|este) )?"
+            r"(?:programa|aplicativo|processo)(?: atual)?",
+            text,
+        )
+        if current_app and context and context.available:
+            app = context.application or context.process_name.removesuffix(".exe")
+            return self._dynamic(
+                "application.close",
+                f"Fechar {app}",
+                "Aplicativos",
+                "close_application",
+                {"application": app, "target_type": "application"},
+                f"Fechei {app}.",
+                risk="contextual",
+            )
+
         close_app = re.fullmatch(rf"{CLOSE_WORDS} (?:o |a )?(.+)", text)
         if (
             close_app
@@ -304,30 +380,43 @@ class IntentParser:
         contextual_targets = {
             "isso", "aqui", "essa pagina", "esta pagina", "pagina atual",
             "essa aba", "esta aba", "aba atual", "essa janela", "esta janela",
-            "janela atual", "programa atual", "aplicativo atual",
+            "janela atual",
+            "esse programa", "esse aplicativo", "essa aplicacao", "esse negocio",
+            "esse processo", "processo atual",
         }
+        if close_app and close_app.group(1).strip() in contextual_targets:
+            reference = close_app.group(1).strip()
+            if "pagina" in reference or "aba" in reference:
+                return self._contextual_close(context, previous_target, browser_only=True)
+            if "janela" in reference and context and context.available:
+                return self._dynamic(
+                    "window.close",
+                    "Fechar janela atual",
+                    "Janelas",
+                    "window",
+                    {"operation": "close", "target_type": "window"},
+                    "Fechado.",
+                    risk="contextual",
+                )
+            return self._contextual_close(context, previous_target)
         if close_app and close_app.group(1) not in contextual_targets:
-            app = normalize_application_name(close_app.group(1))
+            raw_app = close_app.group(1).strip()
+            site_target = fuzzy_entity(raw_app, WEBSITES)
+            if site_target in WEBSITES and context and context.kind == "browser":
+                label = WEBSITES[site_target][0]
+                return self._dynamic(
+                    "browser.close_tab",
+                    f"Fechar {label}",
+                    "Navegador",
+                    "shortcut",
+                    {"keys": ("CTRL", "W"), "context": "browser", "target": site_target, "target_type": "tab"},
+                    f"Fechei o {label}.",
+                    risk="contextual",
+                )
+            app = normalize_application_name(raw_app)
             if app in {"navegador", "browser"} and context and context.kind == "browser":
                 app = context.application or context.process_name.removesuffix(".exe")
-            return self._dynamic("application.close", f"Fechar {app}", "Aplicativos", "close_application", {"application": app}, f"Fechei {app}.", risk="confirmation_required", confirmation=f"Quer mesmo fechar {app}? Isso pode descartar trabalho nao salvo.")
-
-        current_app = re.fullmatch(
-            rf"{CLOSE_WORDS} (?:o )?(?:programa|aplicativo) atual",
-            text,
-        )
-        if current_app and context and context.available:
-            app = context.application or context.process_name.removesuffix(".exe")
-            return self._dynamic(
-                "application.close",
-                f"Fechar {app}",
-                "Aplicativos",
-                "close_application",
-                {"application": app},
-                f"Fechei {app}.",
-                risk="confirmation_required",
-                confirmation=f"Quer mesmo fechar {app}? Isso pode descartar trabalho nao salvo.",
-            )
+            return self._dynamic("application.close", f"Fechar {app}", "Aplicativos", "close_application", {"application": app, "target_type": "application"}, f"Fechei {app}.", risk="contextual")
 
         if re.fullmatch(rf"{OPEN_WORDS} (?:o )?navegador", text):
             return self._dynamic("browser.open", "Abrir navegador", "Navegador", "open_resource", {"target": "https://www.google.com"}, "Abri o navegador.")
@@ -335,7 +424,49 @@ class IntentParser:
         open_app = re.fullmatch(rf"{OPEN_WORDS} (?:o |a |os |as |um |uma |no |na )?(?:aplicativo |programa )?(.+)", text)
         if open_app:
             app = normalize_application_name(open_app.group(1))
-            return self._dynamic("application.open", f"Abrir {app}", "Aplicativos", "open_application", {"application": app}, f"Abri {app}.")
+            return self._dynamic("application.open", f"Abrir {app}", "Aplicativos", "open_application", {"application": app, "target_type": "application"}, f"Abri {app}.")
+        return None
+
+    def _contextual_close(
+        self,
+        context: WindowContext | None,
+        previous_target: str,
+        *,
+        browser_only: bool = False,
+    ) -> ParsedIntent | None:
+        if context and context.available and context.kind == "browser":
+            return self._dynamic(
+                "browser.close_tab",
+                "Fechar aba atual",
+                "Navegador",
+                "shortcut",
+                {"keys": ("CTRL", "W"), "context": "browser", "target_type": "tab"},
+                "Fechado.",
+                risk="contextual",
+            )
+        if browser_only:
+            return None
+        if context and context.available:
+            return self._dynamic(
+                "window.close",
+                "Fechar janela atual",
+                "Janelas",
+                "window",
+                {"operation": "close", "target_type": "window"},
+                "Fechado.",
+                risk="contextual",
+            )
+        if previous_target:
+            app = normalize_application_name(previous_target)
+            return self._dynamic(
+                "application.close",
+                f"Fechar {app}",
+                "Aplicativos",
+                "close_application",
+                {"application": app, "target_type": "application"},
+                f"Fechei {app}.",
+                risk="contextual",
+            )
         return None
 
     def _parse_information(self, text: str) -> ParsedIntent | None:

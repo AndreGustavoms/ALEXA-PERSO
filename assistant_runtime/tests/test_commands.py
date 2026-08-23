@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from assistant_runtime.assistant_commands.models import WindowContext
+from assistant_runtime.assistant_commands.actions import resolve_running_window_handles
 from assistant_runtime.commands import CommandExecutor
 
 
@@ -81,6 +82,27 @@ class CommandExecutorTests(unittest.TestCase):
         self.assertTrue(confirmed.executed)
         self.assertEqual(confirmed.status, "confirmed")
         self.assertEqual(self.programs, [("shutdown.exe", "/s", "/t", "0")])
+
+    def test_explicit_command_replaces_pending_confirmation(self) -> None:
+        pending = self.executor.execute("desligar o computador", authorized=True)
+        result = self.executor.execute(
+            "eu confirmo pode fechar o YouTube",
+            authorized=True,
+        )
+
+        self.assertEqual(pending.status, "awaiting_confirmation")
+        self.assertTrue(result.executed)
+        self.assertEqual(result.action, "browser.close_tab")
+        self.assertEqual(self.shortcuts, [("CTRL", "W")])
+        self.assertEqual(self.programs, [])
+        self.assertFalse(self.executor.confirmations.has_pending())
+
+    def test_contextual_close_does_not_request_confirmation(self) -> None:
+        result = self.executor.execute("pode fechar isso pra mim", authorized=True)
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(self.shortcuts, [("CTRL", "W")])
 
     def test_pending_action_can_be_cancelled(self) -> None:
         self.executor.execute("reinicia o computador", authorized=True)
@@ -205,6 +227,22 @@ class CommandExecutorTests(unittest.TestCase):
 
         self.assertFalse(result.executed)
         self.assertEqual(self.resources, [])
+
+    def test_resolves_discovered_window_by_title(self) -> None:
+        windows = [
+            (10, "custom-app.exe", "Agenda Local - Inicio"),
+            (20, "notepad.exe", "Notas"),
+        ]
+
+        self.assertEqual(resolve_running_window_handles("agenda local", windows), (10,))
+
+    def test_rejects_ambiguous_running_window_match(self) -> None:
+        windows = [
+            (10, "custom-one.exe", "Painel Financeiro"),
+            (20, "custom-two.exe", "Painel Financeiros"),
+        ]
+
+        self.assertEqual(resolve_running_window_handles("painel financeiro", windows), ())
 
 
 if __name__ == "__main__":

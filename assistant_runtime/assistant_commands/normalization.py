@@ -14,6 +14,27 @@ FILLER_PREFIX = re.compile(
     r"(?:voce )?"
 )
 
+REQUEST_PREFIX = re.compile(
+    r"^(?:(?:eu )?confirmo )?(?:doktor )?"
+    r"(?:(?:voce )?(?:pode|consegue)(?: por favor)? |"
+    r"(?:eu )?quero (?:que )?|gostaria (?:que )?)"
+)
+ACTION_START = re.compile(
+    r"^(?:fecha|feche|fechar|encerra|encerre|encerrar|finaliza|finalize|finalizar|"
+    r"mata|matar|tira|tire|tirar|sai|sair|abre|abra|abrir|inicia|inicie|iniciar|"
+    r"bota|botar|minimiza|minimize|minimizar|maximiza|maximize|maximizar|"
+    r"restaura|restaure|restaurar|foca|foque|focar|troca|troque|alternar|"
+    r"pesquisa|pesquise|pesquisar|procura|procure|procurar|busca|busque|buscar|"
+    r"aumenta|aumente|aumentar|abaixa|abaixe|abaixar|diminui|diminua|diminuir|"
+    r"reduz|reduzir|muta|desmuta|toca|tocar|pause|pausa|pausar|play|proxima|anterior)\b"
+)
+SOFTENERS = re.compile(
+    r"\b(?:por favor|pra mim|para mim|ai|rapidinho)\b"
+)
+CONTEXT_REFERENCES = re.compile(
+    r"\b(?:ele|ela|esse negocio|essa coisa|isso daqui|isso ai)\b"
+)
+
 
 def normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFD", value)
@@ -30,6 +51,48 @@ def normalize_text(value: str) -> str:
     clean = re.sub(r"^(?:poderia (?:voce )?|pode voce )", "", clean)
     clean = POLITE_SUFFIX.sub("", clean)
     return clean.strip()
+
+
+def normalize_natural_command(value: str) -> str:
+    """Remove conversational framing while preserving intent parameters."""
+    text = normalize_text(value).removesuffix("?").strip()
+    previous = ""
+    while text != previous:
+        previous = text
+        text = REQUEST_PREFIX.sub("", text).strip()
+
+    if not ACTION_START.match(text):
+        return text
+
+    text = CONTEXT_REFERENCES.sub("isso", text)
+    text = SOFTENERS.sub(" ", text)
+    text = re.sub(r"\b(?:aqui|daqui)\s*$", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    replacements = (
+        (r"^(?:fecha|feche|fechar)\b", "fecha"),
+        (r"^(?:encerra|encerre|encerrar|finaliza|finalize|finalizar|mata|matar)\b", "fecha"),
+        (
+            r"^(?:tira|tire|tirar)\s+"
+            r"(?!(?:um |uma )?(?:print|screenshot|captura)(?:\s|$))",
+            "fecha ",
+        ),
+        (r"^(?:sai|sair)\s+(?:do|da|de)\b", "fecha"),
+        (r"^(?:bota|botar)\b", "abre"),
+        (r"^(?:abra|abrir)\b", "abre"),
+        (r"^(?:inicie|iniciar)\b", "inicia"),
+        (r"^aumentar\b", "aumenta"),
+        (r"^abaixar\b", "abaixa"),
+        (r"^diminuir\b", "diminui"),
+        (r"^reduzir\b", "reduz"),
+        (r"^minimizar\b", "minimiza"),
+        (r"^maximizar\b", "maximiza"),
+        (r"^pausar\b", "pausa"),
+        (r"^tocar\b", "toca"),
+    )
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text)
+    return text.strip()
 
 
 def contains_term(text: str, term: str) -> bool:

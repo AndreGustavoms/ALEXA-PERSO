@@ -9,6 +9,7 @@ import subprocess
 import time
 from ctypes import wintypes
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Callable
 from urllib.parse import quote_plus
@@ -65,6 +66,59 @@ APP_ALIASES = {
     "ferramenta de captura": ("Ferramenta de Captura", "SnippingTool.exe"),
     "gerenciador de tarefas": ("Gerenciador de Tarefas", "taskmgr.exe"),
 }
+
+CLOSE_PROCESS_ALIASES = {
+    **{name: (data[1].lower(),) for name, data in APP_ALIASES.items()},
+    "valorant": ("valorant-win64-shipping.exe", "riotclientservices.exe"),
+}
+
+
+def resolve_running_window_handles(
+    requested_name: str,
+    windows: list[tuple[int, str, str]],
+    threshold: float = 0.82,
+) -> tuple[int, ...]:
+    """Resolve a spoken app name against visible process names and titles."""
+    requested = normalize_text(requested_name)
+    expected_processes = CLOSE_PROCESS_ALIASES.get(requested, ())
+    exact_process = tuple(
+        handle
+        for handle, process_name, _title in windows
+        if process_name.lower() in expected_processes
+    )
+    if exact_process:
+        return exact_process
+
+    ranked: list[tuple[float, int, str]] = []
+    for handle, process_name, title in windows:
+        process = normalize_text(process_name.removesuffix(".exe").replace("_", " "))
+        normalized_title = normalize_text(title)
+        title_parts = tuple(
+            part.strip()
+            for part in re.split(r"\s+(?:-|\|)\s+", normalized_title)
+            if part.strip()
+        )
+        score = SequenceMatcher(None, requested, process).ratio()
+        score = max(
+            (score, *(SequenceMatcher(None, requested, part).ratio() for part in title_parts)),
+        )
+        if requested == process:
+            score = 1.0
+        elif len(requested) >= 4 and requested in normalized_title:
+            score = max(score, 0.95)
+        ranked.append((score, handle, process_name))
+
+    ranked.sort(reverse=True)
+    if not ranked or ranked[0][0] < threshold:
+        return ()
+    if len(ranked) > 1 and ranked[0][2] != ranked[1][2] and ranked[0][0] - ranked[1][0] < 0.08:
+        return ()
+    best_process = ranked[0][2]
+    return tuple(
+        handle
+        for score, handle, process_name in ranked
+        if process_name == best_process and score >= threshold
+    )
 
 
 def open_resource(target: str) -> None:
@@ -362,21 +416,26 @@ class WindowsActions:
 
     def do_close_application(self, intent: ParsedIntent, _context: WindowContext) -> str:
         requested = normalize_text(str(intent.parameters["application"]))
-        known = APP_ALIASES.get(requested)
-        target_process = known[1].lower() if known else requested.removesuffix(".exe") + ".exe"
-        handles: list[int] = []
+        windows: list[tuple[int, str, str]] = []
         if os.name != "nt":
             raise RuntimeError("Acao disponivel somente no Windows.")
         callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
 
         def collect(handle: int, _parameter: int) -> bool:
+            if not ctypes.windll.user32.IsWindowVisible(handle):
+                return True
             process_id = wintypes.DWORD()
             ctypes.windll.user32.GetWindowThreadProcessId(handle, ctypes.byref(process_id))
-            if process_name_for_pid(process_id.value) == target_process:
-                handles.append(handle)
+            process_name = process_name_for_pid(process_id.value)
+            title_length = ctypes.windll.user32.GetWindowTextLengthW(handle)
+            title_buffer = ctypes.create_unicode_buffer(max(1, title_length + 1))
+            ctypes.windll.user32.GetWindowTextW(handle, title_buffer, len(title_buffer))
+            if process_name and title_buffer.value.strip():
+                windows.append((int(handle), process_name, title_buffer.value.strip()))
             return True
 
         ctypes.windll.user32.EnumWindows(callback_type(collect), 0)
+        handles = resolve_running_window_handles(requested, windows)
         if not handles:
             raise FileNotFoundError(f"Aplicativo nao esta aberto: {requested}")
         for handle in handles:

@@ -95,8 +95,13 @@ class IntentParserTests(unittest.TestCase):
             self.assertIsNotNone(intent)
             self.assertEqual(intent.spec.id, "browser.open_site")  # type: ignore[union-attr]
 
-    def test_bare_close_is_ambiguous(self) -> None:
+    def test_bare_close_uses_foreground_context(self) -> None:
         parsed = self.parser.parse("fecha", self.browser)
+
+        self.assertEqual(parsed.spec.id, "browser.close_tab")  # type: ignore[union-attr]
+
+    def test_bare_close_without_context_is_ambiguous(self) -> None:
+        parsed = self.parser.parse("fecha", WindowContext())
 
         self.assertEqual(parsed.spec.id, "assistant.ambiguous_close")  # type: ignore[union-attr]
 
@@ -128,6 +133,116 @@ class IntentParserTests(unittest.TestCase):
                 self.assertIsNotNone(intent)
                 self.assertEqual(intent.spec.id, "application.open")  # type: ignore[union-attr]
                 self.assertEqual(intent.parameters["application"], "valorant")  # type: ignore[union-attr]
+
+    def test_natural_close_phrases_converge_on_browser_tab(self) -> None:
+        phrases = (
+            "fecha o YouTube",
+            "fechar YouTube",
+            "fecha YouTube",
+            "pode fechar pra mim o YouTube",
+            "fecha o YouTube pra mim",
+            "fecha ai o YouTube",
+            "consegue fechar o YouTube?",
+            "voce pode fechar o YouTube?",
+            "encerra o YouTube",
+            "finaliza o YouTube",
+            "sai do YouTube",
+            "pode sair do YouTube",
+            "tira o YouTube",
+            "quero que feche o YouTube",
+            "eu quero fechar o YouTube",
+            "Doktor fecha o YouTube",
+            "Doktor pode fechar o YouTube pra mim",
+            "Doktor fecha ai pra mim",
+            "pode fechar",
+            "pode fechar isso",
+            "fecha isso",
+            "fecha esse negocio",
+            "fecha ele",
+            "fecha ela",
+            "pode fechar ele",
+            "pode fechar ela",
+            "tira isso daqui",
+            "pode tirar isso",
+            "encerra isso",
+            "pode encerrar",
+            "pode encerrar pra mim",
+            "consegue fechar isso pra mim?",
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assert_intent(phrase, "browser.close_tab")
+
+    def test_explicit_window_and_program_references_keep_their_scope(self) -> None:
+        window = self.parser.parse("fecha essa janela", self.browser)
+        program = self.parser.parse("pode fechar ai o programa", self.browser)
+
+        self.assertEqual(window.spec.id, "window.close")  # type: ignore[union-attr]
+        self.assertEqual(program.spec.id, "application.close")  # type: ignore[union-attr]
+        self.assertEqual(program.parameters["application"], "chrome")  # type: ignore[union-attr]
+
+        for phrase in (
+            "fecha esse programa",
+            "fecha esse aplicativo",
+            "encerra esse programa",
+            "finaliza esse programa",
+            "mata esse processo",
+        ):
+            with self.subTest(phrase=phrase):
+                parsed = self.parser.parse(phrase, self.application)
+                self.assertEqual(parsed.spec.id, "application.close")  # type: ignore[union-attr]
+
+    def test_contextual_close_uses_previous_application_when_focus_is_unknown(self) -> None:
+        parsed = self.parser.parse("fecha isso", WindowContext(), "spotify")
+
+        self.assertEqual(parsed.spec.id, "application.close")  # type: ignore[union-attr]
+        self.assertEqual(parsed.parameters["application"], "spotify")  # type: ignore[union-attr]
+
+    def test_fuzzy_application_matching_is_conservative(self) -> None:
+        spotify = self.parser.parse("fecha o spotfy", self.application)
+        unknown = self.parser.parse("fecha o spot", self.application)
+
+        self.assertEqual(spotify.parameters["application"], "spotify")  # type: ignore[union-attr]
+        self.assertEqual(unknown.parameters["application"], "spot")  # type: ignore[union-attr]
+
+    def test_natural_open_phrases_converge_on_application(self) -> None:
+        phrases = (
+            "abre Spotify",
+            "abre ai o Spotify",
+            "pode abrir o Spotify pra mim",
+            "bota o Spotify",
+            "inicia Spotify",
+            "Doktor consegue abrir o Spotify rapidinho",
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                parsed = self.parser.parse(phrase, self.application)
+                self.assertEqual(parsed.spec.id, "application.open")  # type: ignore[union-attr]
+                self.assertEqual(parsed.parameters["application"], "spotify")  # type: ignore[union-attr]
+
+    def test_conversational_wrappers_work_for_common_intents(self) -> None:
+        cases = {
+            "pode minimizar pra mim": "window.minimize",
+            "consegue maximizar rapidinho": "window.maximize",
+            "pode aumentar o volume pra mim": "audio.volume_up",
+            "pode pausar ai": "media.play_pause",
+            "pode pesquisar clima em sao paulo": "browser.search",
+        }
+        for phrase, intent_id in cases.items():
+            with self.subTest(phrase=phrase):
+                self.assert_intent(phrase, intent_id)
+
+    def test_non_commands_do_not_become_actions(self) -> None:
+        phrases = (
+            "o YouTube fechou sozinho",
+            "gosto de fechar ciclos",
+            "spotify e legal",
+            "pode ser",
+            "o programa esta aberto",
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertIsNone(self.parser.parse(phrase, self.browser))
 
 
 if __name__ == "__main__":

@@ -67,3 +67,8 @@ class ConfirmationManager:
             if self._pending and time.monotonic() >= self._expires_at:
                 self._pending = None
             return self._pending is not None
+
+    def discard(self) -> None:
+        with self._lock:
+            self._pending = None
+            self._expires_at = 0.0
