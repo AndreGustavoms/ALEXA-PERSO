@@ -13,6 +13,19 @@ interface, cria o atalho `Doktor Assistant` na area de trabalho e configura o
 inicio automatico com o Windows. Depois disso, o aplicativo fica disponivel no
 icone da bandeja do sistema.
 
+Para instalar a partir do repositorio privado do GitHub, clone o projeto com
+GitHub Desktop ou com uma sessao autenticada do Git e execute o instalador:
+
+```powershell
+git clone https://github.com/AndreGustavoms/ALEXA-PERSO.git
+cd ALEXA-PERSO
+.\INSTALAR_ASSISTENTE.cmd
+```
+
+A instalacao clonada usa `git pull` automaticamente para buscar atualizacoes.
+Um ZIP de um repositorio privado precisa de um `DOKTOR_GITHUB_TOKEN` ou do
+GitHub CLI autenticado para permitir atualizacoes sem Git.
+
 ## Usar
 
 1. Diga `Ola, Doktor`.
