@@ -52,6 +52,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: python assistant_runtime/setup_model.py
+      - run: python -m unittest discover -s assistant_runtime/tests -v
       - run: python scripts/build_desktop.py --skip-web --skip-model
       - name: Install Inno Setup
         shell: powershell

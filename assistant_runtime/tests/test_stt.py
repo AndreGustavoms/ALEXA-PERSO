@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import unittest
 from array import array
 from pathlib import Path
@@ -36,6 +37,7 @@ class FakeSocket:
 
 
 class STTTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "DPAPI existe somente no Windows")
     def test_round_trips_api_key_with_windows_protection(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "key.bin"

@@ -1,3 +1,4 @@
+import os
 import time
 import unittest
 from datetime import datetime
@@ -8,6 +9,7 @@ from assistant_runtime.assistant_commands.models import WindowContext
 from assistant_runtime.commands import CommandExecutor
 
 
+@unittest.skipUnless(os.name == "nt", "Integracao de acoes Windows")
 class CommandExecutorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.resources: list[str] = []

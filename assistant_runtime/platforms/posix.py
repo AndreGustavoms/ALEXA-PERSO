@@ -101,11 +101,11 @@ class PosixAdapter:
         return self._format_success(intent)
 
     def do_tell_time(self, _intent: ParsedIntent, _context: WindowContext) -> str:
-        return f"Agora sao {self.now_provider():%H:%M}."
+        return f"Agora são {self.now_provider():%H:%M}."
 
     def do_tell_date(self, _intent: ParsedIntent, _context: WindowContext) -> str:
-        return f"Hoje e dia {self.now_provider():%d/%m/%Y}."
+        return f"Hoje é dia {self.now_provider():%d/%m/%Y}."
 
     def do_tell_weekday(self, _intent: ParsedIntent, _context: WindowContext) -> str:
         names = ("segunda-feira", "terca-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sabado", "domingo")
-        return f"Hoje e {names[self.now_provider().weekday()]} .".replace("  ", " ")
+        return f"Hoje é {names[self.now_provider().weekday()]} .".replace("  ", " ")
