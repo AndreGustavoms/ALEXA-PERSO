@@ -67,9 +67,12 @@ export function VoiceAssistant() {
       setError('');
       setTranscript(recognizedText);
       setResponse(reply);
-      speak(reply);
+
+      if (synthesisAvailability === 'available') {
+        speak(reply);
+      }
     },
-    [speak],
+    [speak, synthesisAvailability],
   );
 
   const handleRecognitionError = useCallback((message: string) => {
@@ -87,7 +90,14 @@ export function VoiceAssistant() {
     onResult: handleTranscript,
   });
 
-  const status: AssistantStatus = error
+  const isCheckingSupport =
+    recognitionAvailability.state === 'checking' ||
+    synthesisAvailability === 'checking';
+  const recognitionUnavailable = recognitionAvailability.state === 'unavailable';
+  const synthesisUnavailable = synthesisAvailability === 'unavailable';
+  const canStart = !isCheckingSupport && !recognitionUnavailable;
+
+  const status: AssistantStatus = error || recognitionUnavailable
     ? 'error'
     : isListening
       ? 'listening'
@@ -96,12 +106,6 @@ export function VoiceAssistant() {
         : 'idle';
 
   const content = statusContent[status];
-  const isCheckingSupport =
-    recognitionAvailability.state === 'checking' ||
-    synthesisAvailability === 'checking';
-  const recognitionUnavailable = recognitionAvailability.state === 'unavailable';
-  const synthesisUnavailable = synthesisAvailability === 'unavailable';
-  const canStart = !isCheckingSupport && !recognitionUnavailable;
 
   const supportMessage = useMemo(() => {
     if (recognitionAvailability.state !== 'unavailable') {

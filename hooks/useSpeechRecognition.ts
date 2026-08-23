@@ -126,7 +126,14 @@ export function useSpeechRecognition({
       return;
     }
 
-    recognitionRef.current.stop();
+    try {
+      recognitionRef.current.stop();
+    } catch (caughtError) {
+      if (!(caughtError instanceof DOMException && caughtError.name === 'InvalidStateError')) {
+        onErrorRef.current('Não foi possível interromper o microfone corretamente.');
+      }
+    }
+
     setIsListening(false);
   }, []);
 
