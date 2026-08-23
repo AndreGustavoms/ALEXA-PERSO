@@ -89,6 +89,12 @@ class IntentParserTests(unittest.TestCase):
         self.assertEqual(application.spec.id, "application.open")  # type: ignore[union-attr]
         self.assertEqual(website.spec.id, "browser.open_site")  # type: ignore[union-attr]
 
+    def test_recovers_bare_web_destination_from_speech(self) -> None:
+        for phrase in ("o youtube para mim", "youtube", "o whatsapp"):
+            intent = self.parser.parse(phrase, self.application)
+            self.assertIsNotNone(intent)
+            self.assertEqual(intent.spec.id, "browser.open_site")  # type: ignore[union-attr]
+
     def test_bare_close_is_ambiguous(self) -> None:
         parsed = self.parser.parse("fecha", self.browser)
 

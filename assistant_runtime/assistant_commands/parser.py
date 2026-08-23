@@ -243,6 +243,15 @@ class IntentParser:
                 label, target = WEBSITES[site_name]
                 return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
 
+        # Speech recognition can omit the verb (for example: "o youtube").
+        # Keep the well-known web destinations usable without opening arbitrary text.
+        bare_site = re.fullmatch(r"(?:o |a |no |na )?(.+)", text)
+        if bare_site and bare_site.group(1).strip() in WEBSITES:
+            site_name = bare_site.group(1).strip()
+            if site_name != "spotify":
+                label, target = WEBSITES[site_name]
+                return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
+
         close_app = re.fullmatch(rf"{CLOSE_WORDS} (?:o |a )?(.+)", text)
         contextual_targets = {
             "isso", "aqui", "essa pagina", "esta pagina", "pagina atual",
