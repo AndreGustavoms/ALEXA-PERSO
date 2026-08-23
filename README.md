@@ -1,10 +1,21 @@
 # Doktor Assistant
 
-Assistente local do ecossistema Doktor para Windows. Permanece em segundo plano, reconhece uma frase de
+Assistente local do ecossistema Doktor. Permanece em segundo plano, reconhece uma frase de
 ativacao sem enviar o audio para um servidor e responde usando a voz instalada
 no computador.
 
-## Instalar
+## Instalar (recomendado)
+
+Abra [GitHub Releases](https://github.com/AndreGustavoms/ALEXA-PERSO/releases),
+baixe o instalador do seu sistema e execute normalmente. O pacote inclui o
+runtime, a interface e o modelo local; o usuário não precisa instalar Python,
+Node.js ou usar terminal.
+
+Pacotes atuais: Windows x64 e Linux x64/ARM64. macOS e Windows ARM64 estão
+bloqueados pelos binários disponíveis do Vosk 0.3.45; detalhes em
+`docs/BUILD.md`.
+
+## Instalar pelo código-fonte
 
 De dois cliques em `INSTALAR_ASSISTENTE.cmd`.
 
@@ -205,8 +216,11 @@ npm audit --omit=dev
 
 ## Compatibilidade e privacidade
 
-O modo em segundo plano foi preparado para Windows 10 ou 11, Python 3.11 ou
-superior e Node.js 22 ou superior. A interface usa Chrome ou Edge quando um
-deles esta instalado. Reconhecimento, respostas e sintese acontecem localmente;
-internet e necessaria na primeira instalacao e quando um comando abre ou
-pesquisa conteudo da web.
+O pacote Windows foi validado no Windows 10 x64. Os pacotes Linux x64 e ARM64
+são gerados nativamente pelo GitHub Actions. Python 3.11+ e Node.js 22+ são
+necessários apenas para desenvolvimento. Reconhecimento, respostas e síntese
+acontecem localmente; internet é usada por updates e por recursos web/OpenAI.
+
+Documentação técnica: `docs/ARCHITECTURE.md`, `docs/BUILD.md`,
+`docs/RELEASE.md`, `docs/PLATFORM_ADAPTERS.md`, `docs/VOICE_ENGINE.md` e
+`docs/TROUBLESHOOTING.md`.

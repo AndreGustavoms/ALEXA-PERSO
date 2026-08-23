@@ -6,13 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from .actions import WindowsActions, open_resource, send_windows_app_command, start_program
+from .actions import open_resource, send_windows_app_command, start_program
 from .confirmation import ConfirmationManager
 from .context import WindowContextProvider
 from .history import CommandHistory
 from .models import CommandResult, ParsedIntent, RiskLevel, WindowContext
 from .parser import IntentParser
 from .router import CommandRouter
+from ..platforms.factory import create_platform_actions
 
 
 class CommandExecutor:
@@ -45,7 +46,7 @@ class CommandExecutor:
             action_options["shortcut_sender"] = shortcut_sender
         if text_sender is not None:
             action_options["text_sender"] = text_sender
-        self.actions = WindowsActions(**action_options)  # type: ignore[arg-type]
+        self.actions = create_platform_actions(**action_options)  # type: ignore[arg-type]
         self.parser = IntentParser()
         self.router = CommandRouter(self.parser)
         self.confirmations = ConfirmationManager(confirmation_timeout)

@@ -9,6 +9,7 @@ export default tseslint.config(
       '.next/**',
       '.vinext/**',
       '.venv/**',
+      'build/**',
       'dist/**',
       'node_modules/**',
       'runtime/**',

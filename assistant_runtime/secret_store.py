@@ -50,11 +50,23 @@ def unprotect_secret(value: bytes) -> str:
 
 
 def save_secret(path: Path, value: str) -> None:
+    if os.name != "nt":
+        import keyring
+
+        keyring.set_password("Doktor Assistant", "openai-api-key", value)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(base64.b64encode(protect_secret(value)))
 
 
 def load_secret(path: Path) -> str:
+    if os.name != "nt":
+        try:
+            import keyring
+
+            return (keyring.get_password("Doktor Assistant", "openai-api-key") or "").strip()
+        except Exception:
+            return ""
     try:
         return unprotect_secret(base64.b64decode(path.read_bytes())).strip()
     except (OSError, ValueError):

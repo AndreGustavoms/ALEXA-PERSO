@@ -824,6 +824,65 @@ a:focus-visible {
   border-color: var(--danger);
 }
 
+.setup-dialog {
+  max-width: 520px;
+}
+
+.setup-fields {
+  display: grid;
+  gap: 18px;
+}
+
+.setup-fields > label:not(.setup-toggle),
+.level-field {
+  display: grid;
+  gap: 7px;
+}
+
+.setup-fields label > span,
+.level-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.setup-fields select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.input-level {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e7ebf1;
+}
+
+.input-level i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 100ms linear;
+}
+
+.setup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.setup-toggle input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+}
+
 @keyframes pulse {
   0% {
     opacity: 0.85;

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from array import array
 import ctypes
 import json
 import logging
 import os
 import queue
-import subprocess
 import sys
 import threading
 import time
@@ -23,6 +23,9 @@ import sounddevice as sd
 import vosk
 from PIL import Image
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 try:
     from .commands import CommandExecutor
     from .permission_store import PermissionStore
@@ -35,18 +38,40 @@ try:
         TranscriptAccumulator,
     )
     from .voice_metrics import VoiceMetrics
+    from .app_paths import PATHS
+    from .platforms import detect_platform
+    from .platforms.system import (
+        is_autostart_enabled as platform_autostart_enabled,
+        open_desktop_window,
+        set_autostart as platform_set_autostart,
+    )
+    from .version import __version__
+    from .health import audio_devices, health_snapshot
+    from .settings import SettingsStore
+    from .update_service import UpdateService
 except ImportError:  # Execucao direta pelo inicializador local.
-    from commands import CommandExecutor
-    from permission_store import PermissionStore
-    from replies import create_assistant_reply
-    from stt import STTEventType, SpeechToTextSession, create_stt_provider
-    from voice_activity import (
+    from assistant_runtime.commands import CommandExecutor
+    from assistant_runtime.permission_store import PermissionStore
+    from assistant_runtime.replies import create_assistant_reply
+    from assistant_runtime.stt import STTEventType, SpeechToTextSession, create_stt_provider
+    from assistant_runtime.voice_activity import (
         TranscriptAccumulator,
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
     )
-    from voice_metrics import VoiceMetrics
+    from assistant_runtime.voice_metrics import VoiceMetrics
+    from assistant_runtime.app_paths import PATHS
+    from assistant_runtime.platforms import detect_platform
+    from assistant_runtime.platforms.system import (
+        is_autostart_enabled as platform_autostart_enabled,
+        open_desktop_window,
+        set_autostart as platform_set_autostart,
+    )
+    from assistant_runtime.version import __version__
+    from assistant_runtime.health import audio_devices, health_snapshot
+    from assistant_runtime.settings import SettingsStore
+    from assistant_runtime.update_service import UpdateService
 
 APP_NAME = "Doktor Assistant"
 WAKE_PHRASE = "Olá, Doktor"
@@ -56,30 +81,16 @@ WAKE_VARIANTS = (
 WEB_PORT = 3000
 WEB_URL = f"http://localhost:{WEB_PORT}/"
 
-PROJECT_DIRECTORY = Path(__file__).resolve().parents[1]
-DIST_DIRECTORY = PROJECT_DIRECTORY / "dist"
-MODEL_DIRECTORY = (
-    PROJECT_DIRECTORY / "runtime" / "models" / "vosk-model-small-pt-0.3"
-)
-LOGS_DIRECTORY = PROJECT_DIRECTORY / "runtime" / "logs"
+DIST_DIRECTORY = PATHS.web
+MODEL_DIRECTORY = PATHS.model
+LOGS_DIRECTORY = PATHS.logs
 LOG_FILE = LOGS_DIRECTORY / "assistant.log"
-PERMISSION_FILE = PROJECT_DIRECTORY / "runtime" / "config" / "permissions.json"
-VOICE_CONFIG_FILE = PROJECT_DIRECTORY / "assistant_runtime" / "voice_config.json"
-STT_CONFIG_FILE = PROJECT_DIRECTORY / "assistant_runtime" / "stt_config.json"
-VOICE_METRICS_FILE = PROJECT_DIRECTORY / "runtime" / "config" / "voice-metrics.json"
-TRAY_ICON_PATH = PROJECT_DIRECTORY / "assets" / "doktor-assistant.png"
-AUTOSTART_DIRECTORY = (
-    Path(os.environ.get("APPDATA", ""))
-    / "Microsoft"
-    / "Windows"
-    / "Start Menu"
-    / "Programs"
-    / "Startup"
-)
-AUTOSTART_FILE = AUTOSTART_DIRECTORY / "Doktor Assistant.vbs"
-LEGACY_AUTOSTART_FILE = AUTOSTART_DIRECTORY / "Assistente de voz.vbs"
+PERMISSION_FILE = PATHS.config / "permissions.json"
+VOICE_CONFIG_FILE = PATHS.voice_config
+STT_CONFIG_FILE = PATHS.stt_config
+VOICE_METRICS_FILE = PATHS.config / "voice-metrics.json"
+TRAY_ICON_PATH = PATHS.assets / "doktor-assistant.png"
 
-DETACHED_PROCESS = 0x00000008
 ERROR_ALREADY_EXISTS = 183
 PYSTRAY_STOP_MESSAGE = 0x040A
 TRAY_WINDOW_PREFIX = "assistente-voz"
@@ -113,50 +124,9 @@ def create_tray_image() -> Image.Image:
         return source.convert("RGBA").resize((64, 64), Image.Resampling.LANCZOS)
 
 
-def find_browser() -> Path | None:
-    candidates = (
-        Path(os.environ.get("PROGRAMFILES", ""))
-        / "Google"
-        / "Chrome"
-        / "Application"
-        / "chrome.exe",
-        Path(os.environ.get("PROGRAMFILES(X86)", ""))
-        / "Google"
-        / "Chrome"
-        / "Application"
-        / "chrome.exe",
-        Path(os.environ.get("PROGRAMFILES(X86)", ""))
-        / "Microsoft"
-        / "Edge"
-        / "Application"
-        / "msedge.exe",
-        Path(os.environ.get("PROGRAMFILES", ""))
-        / "Microsoft"
-        / "Edge"
-        / "Application"
-        / "msedge.exe",
-    )
-    return next((candidate for candidate in candidates if candidate.exists()), None)
-
-
 def open_app_window() -> None:
-    browser = find_browser()
-
     try:
-        if browser:
-            subprocess.Popen(
-                [
-                    str(browser),
-                    f"--app={WEB_URL}",
-                    "--window-size=1180,820",
-                ],
-                cwd=PROJECT_DIRECTORY,
-                creationflags=DETACHED_PROCESS,
-                close_fds=True,
-            )
-            return
-
-        os.startfile(WEB_URL)  # type: ignore[attr-defined]
+        open_desktop_window(WEB_URL)
     except OSError:
         logging.exception("Não foi possível abrir a interface.")
 
@@ -225,6 +195,8 @@ def show_startup_error(message: str) -> None:
 class AssistantRuntime:
     def __init__(self) -> None:
         self.permission_store = PermissionStore(PERMISSION_FILE)
+        self.settings_store = SettingsStore(PATHS.config / "settings.json")
+        self.update_service = UpdateService(self.settings_store.value().update_channel)
         self.command_executor = CommandExecutor(
             status_callback=lambda mode: self.update_state(mode=mode)
         )
@@ -232,6 +204,7 @@ class AssistantRuntime:
         self.listening_enabled = threading.Event()
         self.listening_enabled.set()
         self.reset_recognizer = threading.Event()
+        self.audio_device_changed = threading.Event()
         self.state_lock = threading.Lock()
         self.state: dict[str, Any] = {
             "connected": True,
@@ -245,11 +218,18 @@ class AssistantRuntime:
             "transcript": "",
             "wakePhrase": WAKE_PHRASE,
             "lastAction": None,
+            "version": __version__,
+            "platform": detect_platform().__dict__,
+            "settings": self.settings_store.snapshot(),
+            "update": self.update_service.snapshot(),
+            "autostart": self.is_autostart_enabled(),
+            "audioLevel": 0.0,
         }
         self.icon: pystray.Icon | None = None
         self.local_server: ThreadingHTTPServer | None = None
         self.speech_engine: pyttsx3.Engine | None = None
         self.voice_metrics = VoiceMetrics(VOICE_METRICS_FILE)
+        self.last_audio_level_update = 0.0
 
     def snapshot(self) -> dict[str, Any]:
         with self.state_lock:
@@ -275,6 +255,19 @@ class AssistantRuntime:
             except RuntimeError:
                 pass
 
+    def update_audio_level(self, pcm16: bytes) -> None:
+        now = time.monotonic()
+        if now - self.last_audio_level_update < 0.1:
+            return
+        samples = array("h")
+        samples.frombytes(pcm16)
+        if not samples:
+            return
+        level = round(max(abs(value) for value in samples) / 32768, 3)
+        with self.state_lock:
+            self.state["audioLevel"] = level
+        self.last_audio_level_update = now
+
     def set_listening(self, enabled: bool) -> None:
         if enabled:
             self.listening_enabled.set()
@@ -291,6 +284,29 @@ class AssistantRuntime:
     def set_permission(self, accepted: bool) -> None:
         permission = self.permission_store.set_accepted(accepted)
         self.update_state(permission=permission)
+
+    def set_settings(self, payload: dict[str, object]) -> None:
+        previous_device = self.settings_store.value().microphone_device
+        settings = self.settings_store.update(payload)
+        if settings.update_channel != self.update_service.channel:
+            self.update_service = UpdateService(settings.update_channel)
+        self.update_state(settings=self.settings_store.snapshot(), update=self.update_service.snapshot())
+        if settings.microphone_device != previous_device:
+            self.audio_device_changed.set()
+            self.reset_recognizer.set()
+
+    def check_for_updates(self) -> None:
+        info = self.update_service.check()
+        self.update_state(update=self.update_service.snapshot())
+        if info.available and self.icon:
+            self.icon.notify(f"Doktor {info.latestVersion} esta disponivel.", "Atualizacao")
+
+    def update_loop(self) -> None:
+        if self.stop_event.wait(10.0):
+            return
+        while not self.stop_event.is_set():
+            self.check_for_updates()
+            self.stop_event.wait(6 * 60 * 60)
 
     def ensure_web_assets(self) -> None:
         if not (DIST_DIRECTORY / "index.html").exists():
@@ -361,6 +377,9 @@ class AssistantRuntime:
                     "/api/listening",
                     "/api/open",
                     "/api/permission",
+                    "/api/settings",
+                    "/api/update",
+                    "/api/autostart",
                 }:
                     self.send_json(404, {"error": "Rota não encontrada."})
                     return
@@ -380,6 +399,25 @@ class AssistantRuntime:
                 request_path = self.request_path()
                 if request_path == "/api/state":
                     self.send_json(200, runtime.snapshot())
+                    return
+
+                if request_path == "/api/audio/devices":
+                    try:
+                        self.send_json(200, {"devices": audio_devices()})
+                    except Exception as error:
+                        self.send_json(503, {"error": str(error), "devices": []})
+                    return
+
+                if request_path == "/api/health":
+                    self.send_json(200, health_snapshot(str(runtime.snapshot().get("sttProvider", ""))))
+                    return
+
+                if request_path == "/api/settings":
+                    self.send_json(200, runtime.settings_store.snapshot())
+                    return
+
+                if request_path == "/api/update":
+                    self.send_json(200, runtime.update_service.snapshot())
                     return
 
                 if request_path.startswith("/api/"):
@@ -402,7 +440,7 @@ class AssistantRuntime:
                     self.send_json(200, {"ok": True})
                     return
 
-                if request_path not in {"/api/listening", "/api/permission"}:
+                if request_path not in {"/api/listening", "/api/permission", "/api/settings", "/api/update", "/api/autostart"}:
                     self.send_json(404, {"error": "Rota não encontrada."})
                     return
 
@@ -424,6 +462,45 @@ class AssistantRuntime:
                         self.send_json(400, {"error": "Estado de escuta inválido."})
                         return
                     runtime.set_listening(enabled)
+                    self.send_json(200, runtime.snapshot())
+                    return
+
+                if request_path == "/api/settings":
+                    try:
+                        runtime.set_settings(payload)
+                    except (OSError, TypeError, ValueError) as error:
+                        self.send_json(400, {"error": str(error)})
+                        return
+                    self.send_json(200, runtime.settings_store.snapshot())
+                    return
+
+                if request_path == "/api/update":
+                    action = payload.get("action", "check")
+                    if action == "check":
+                        runtime.check_for_updates()
+                    elif action == "install":
+                        try:
+                            runtime.update_service.download_and_install()
+                        except Exception as error:
+                            self.send_json(503, {"error": str(error)})
+                            return
+                    else:
+                        self.send_json(400, {"error": "Acao de atualizacao invalida."})
+                        return
+                    self.send_json(200, runtime.update_service.snapshot())
+                    return
+
+                if request_path == "/api/autostart":
+                    enabled = payload.get("enabled")
+                    if not isinstance(enabled, bool):
+                        self.send_json(400, {"error": "Estado de inicializacao invalido."})
+                        return
+                    try:
+                        runtime.set_autostart(enabled)
+                    except OSError as error:
+                        self.send_json(500, {"error": str(error)})
+                        return
+                    runtime.update_state(autostart=enabled)
                     self.send_json(200, runtime.snapshot())
                     return
 
@@ -573,14 +650,13 @@ class AssistantRuntime:
         if self.listening_enabled.is_set():
             self.update_state(mode="wake", partial="")
 
-    @staticmethod
-    def select_input_sample_rate(preferred: int) -> int:
+    def select_input_sample_rate(self, preferred: int) -> int:
         candidates = tuple(dict.fromkeys((preferred, 16_000, 48_000, 32_000, 8_000)))
         failures: list[str] = []
         for sample_rate in candidates:
             try:
                 sd.check_input_settings(
-                    device=None,
+                    device=self.settings_store.value().microphone_device,
                     channels=1,
                     dtype="int16",
                     samplerate=sample_rate,
@@ -607,6 +683,7 @@ class AssistantRuntime:
             del frames, time_info
             if status:
                 logging.warning("Estado do microfone: %s", status)
+            self.update_audio_level(bytes(indata))
             try:
                 audio_queue.put_nowait(bytes(indata))
             except queue.Full:
@@ -624,7 +701,7 @@ class AssistantRuntime:
         with sd.RawInputStream(
             samplerate=sample_rate,
             blocksize=voice_config.frame_samples,
-            device=None,
+            device=self.settings_store.value().microphone_device,
             dtype="int16",
             channels=1,
             callback=audio_callback,
@@ -637,6 +714,9 @@ class AssistantRuntime:
             )
 
             while not self.stop_event.is_set():
+                if self.audio_device_changed.is_set():
+                    self.audio_device_changed.clear()
+                    return
                 if self.reset_recognizer.is_set():
                     self.reset_recognizer.clear()
                     self.drain_audio(audio_queue)
@@ -758,6 +838,7 @@ class AssistantRuntime:
             del frames, time_info
             if status:
                 logging.warning("Estado do microfone: %s", status)
+            self.update_audio_level(bytes(indata))
             try:
                 audio_queue.put_nowait(bytes(indata))
             except queue.Full:
@@ -793,7 +874,7 @@ class AssistantRuntime:
         with sd.RawInputStream(
             samplerate=sample_rate,
             blocksize=voice_config.frame_samples,
-            device=None,
+            device=self.settings_store.value().microphone_device,
             dtype="int16",
             channels=1,
             callback=audio_callback,
@@ -811,6 +892,9 @@ class AssistantRuntime:
             )
 
             while not self.stop_event.is_set():
+                if self.audio_device_changed.is_set():
+                    self.audio_device_changed.clear()
+                    return
                 if self.reset_recognizer.is_set():
                     self.reset_recognizer.clear()
                     self.drain_audio(audio_queue)
@@ -961,7 +1045,9 @@ class AssistantRuntime:
         while not self.stop_event.is_set():
             try:
                 self.run_hybrid_audio_session(model, voice_config)
-                return
+                if self.stop_event.is_set():
+                    return
+                continue
             except Exception as error:
                 if self.stop_event.is_set():
                     return
@@ -978,25 +1064,10 @@ class AssistantRuntime:
                 self.stop_event.wait(3.0)
 
     def is_autostart_enabled(self) -> bool:
-        return AUTOSTART_FILE.exists() or LEGACY_AUTOSTART_FILE.exists()
+        return platform_autostart_enabled()
 
     def set_autostart(self, enabled: bool) -> None:
-        if not enabled:
-            AUTOSTART_FILE.unlink(missing_ok=True)
-            LEGACY_AUTOSTART_FILE.unlink(missing_ok=True)
-            return
-
-        launcher = PROJECT_DIRECTORY / "INICIAR_ASSISTENTE.vbs"
-        command = f'wscript.exe //nologo "{launcher}"'
-        escaped_command = command.replace('"', '""')
-        AUTOSTART_FILE.parent.mkdir(parents=True, exist_ok=True)
-        AUTOSTART_FILE.write_text(
-            "Set shell = CreateObject(\"WScript.Shell\")\n"
-            f"shell.CurrentDirectory = \"{PROJECT_DIRECTORY}\"\n"
-            f"shell.Run \"{escaped_command}\", 0, False\n",
-            encoding="utf-8-sig",
-        )
-        LEGACY_AUTOSTART_FILE.unlink(missing_ok=True)
+        platform_set_autostart(enabled)
 
     def toggle_autostart(self) -> None:
         try:
@@ -1034,6 +1105,11 @@ class AssistantRuntime:
             daemon=True,
         )
         audio_thread.start()
+        threading.Thread(
+            target=self.update_loop,
+            name="release-update-check",
+            daemon=True,
+        ).start()
 
         self.icon = pystray.Icon(
             "assistente-voz",
@@ -1062,7 +1138,7 @@ class AssistantRuntime:
                     lambda _icon, _item: open_app_window(),
                 ),
                 pystray.MenuItem(
-                    "Iniciar com o Windows",
+                    "Iniciar com o sistema",
                     lambda _icon, _item: self.toggle_autostart(),
                     checked=lambda _item: self.is_autostart_enabled(),
                 ),

@@ -15,8 +15,10 @@ import vosk
 
 try:
     from .secret_store import load_secret
+    from .app_paths import PATHS
 except ImportError:
     from secret_store import load_secret
+    from app_paths import PATHS
 
 
 class STTEventType(Enum):
@@ -415,7 +417,7 @@ def create_stt_provider(
     config = STTConfig.from_file(config_path)
     local = LocalVoskSTT(model)
     primary: SpeechToTextProvider | None = None
-    key_file = config_path.parent.parent / "runtime" / "config" / "openai-key.bin"
+    key_file = PATHS.config / "openai-key.bin"
     api_key = os.environ.get("OPENAI_API_KEY", "") or load_secret(key_file)
     should_use_openai = config.provider == "openai_realtime" or (
         config.provider == "auto" and bool(api_key)

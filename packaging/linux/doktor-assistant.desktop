@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Doktor Assistant
+Comment=Assistente de voz local
+Exec=Doktor --open
+Icon=doktor-assistant
+Terminal=false
+Categories=Utility;Audio;
+StartupNotify=false

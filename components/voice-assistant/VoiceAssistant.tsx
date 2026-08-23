@@ -7,6 +7,7 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  Settings,
   Square,
   Volume2,
   VolumeX,
@@ -82,6 +83,11 @@ export function VoiceAssistant() {
   const [error, setError] = useState('');
   const [isPermissionOpen, setIsPermissionOpen] = useState(false);
   const [hasConfirmedPermission, setHasConfirmedPermission] = useState(false);
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
+  const [devices, setDevices] = useState<Array<{ id: number; name: string; default: boolean }>>([]);
+  const [microphoneDevice, setMicrophoneDevice] = useState<number | null>(null);
+  const [updateChannel, setUpdateChannel] = useState<'stable' | 'beta' | 'dev'>('stable');
+  const [autostart, setAutostartChoice] = useState(false);
   const didPromptPermissionRef = useRef(false);
 
   const handleSynthesisError = useCallback((message: string) => {
@@ -112,6 +118,8 @@ export function VoiceAssistant() {
     isConnected: isBackgroundConnected,
     setListening: setBackgroundListening,
     setPermission,
+    setAutostart,
+    updateSettings,
     state: backgroundState,
   } = useBackgroundAssistant({
     onInteraction: handleBackgroundInteraction,
@@ -163,18 +171,42 @@ export function VoiceAssistant() {
   const backgroundMode = backgroundState?.mode;
   const backgroundEnabled = backgroundState?.enabled ?? false;
   const permissionAccepted = backgroundState?.permission.accepted ?? false;
+  const onboardingComplete = backgroundState?.settings?.onboarding_complete;
+  const configuredMicrophone = backgroundState?.settings?.microphone_device;
+  const configuredChannel = backgroundState?.settings?.update_channel;
+  const configuredAutostart = backgroundState?.autostart;
 
   useEffect(() => {
     if (
       isBackgroundConnected &&
       backgroundState?.permission &&
+      onboardingComplete &&
       !backgroundState.permission.accepted &&
       !didPromptPermissionRef.current
     ) {
       didPromptPermissionRef.current = true;
       setIsPermissionOpen(true);
     }
-  }, [backgroundState?.permission, isBackgroundConnected]);
+  }, [backgroundState?.permission, isBackgroundConnected, onboardingComplete]);
+
+  useEffect(() => {
+    if (!isBackgroundConnected || configuredChannel === undefined) return;
+    const timeout = window.setTimeout(() => {
+      setMicrophoneDevice(configuredMicrophone ?? null);
+      setUpdateChannel(configuredChannel);
+      setAutostartChoice(Boolean(configuredAutostart));
+      if (!onboardingComplete) setIsSetupOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [configuredAutostart, configuredChannel, configuredMicrophone, isBackgroundConnected, onboardingComplete]);
+
+  useEffect(() => {
+    if (!isSetupOpen) return;
+    void fetch('/api/audio/devices')
+      .then((result) => result.json())
+      .then((payload: { devices?: Array<{ id: number; name: string; default: boolean }> }) => setDevices(payload.devices || []))
+      .catch(() => setDevices([]));
+  }, [isSetupOpen]);
 
   useEffect(() => {
     if (!isPermissionOpen) {
@@ -299,6 +331,22 @@ export function VoiceAssistant() {
     }
   }
 
+  async function finishSetup() {
+    setError('');
+    try {
+      await updateSettings({
+        microphone_device: microphoneDevice,
+        onboarding_complete: true,
+        update_channel: updateChannel,
+      });
+      await setAutostart(autostart);
+      setIsSetupOpen(false);
+      if (!permissionAccepted) setIsPermissionOpen(true);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Nao foi possivel concluir a configuracao.');
+    }
+  }
+
   const buttonLabel = isBackgroundConnected
     ? backgroundEnabled
       ? 'Pausar escuta contínua'
@@ -365,6 +413,17 @@ export function VoiceAssistant() {
             <h2 id="conversation-title">Atividade</h2>
 
             <div className="conversation-actions">
+              {isBackgroundConnected && (
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => setIsSetupOpen(true)}
+                  aria-label="Configuracoes"
+                  title="Configuracoes"
+                >
+                  <Settings aria-hidden="true" />
+                </button>
+              )}
               {isBackgroundConnected && (
                 <button
                   className={`icon-button permission-button ${permissionAccepted ? 'is-active' : ''}`}
@@ -569,6 +628,40 @@ export function VoiceAssistant() {
                   Aceitar e ativar
                 </button>
               )}
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {isSetupOpen && (
+        <div className="permission-backdrop" role="presentation">
+          <section className="permission-dialog setup-dialog" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+            <header className="permission-header">
+              <span className="permission-icon" aria-hidden="true"><Mic /></span>
+              <div><p className="panel-kicker">Doktor {backgroundState?.version}</p><h2 id="setup-title">Configurar assistente</h2></div>
+              {backgroundState?.settings?.onboarding_complete && (
+                <button className="icon-button" type="button" onClick={() => setIsSetupOpen(false)} aria-label="Fechar" title="Fechar"><X /></button>
+              )}
+            </header>
+            <div className="permission-content setup-fields">
+              <label>
+                <span>Microfone</span>
+                <select value={microphoneDevice ?? ''} onChange={(event) => setMicrophoneDevice(event.target.value === '' ? null : Number(event.target.value))}>
+                  <option value="">Padrao do sistema</option>
+                  {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.default ? ' (padrao)' : ''}</option>)}
+                </select>
+              </label>
+              <div className="level-field"><span>Nivel de entrada</span><div className="input-level"><i style={{ width: `${Math.min(100, (backgroundState?.audioLevel ?? 0) * 180)}%` }} /></div></div>
+              <label>
+                <span>Atualizacoes</span>
+                <select value={updateChannel} onChange={(event) => setUpdateChannel(event.target.value as 'stable' | 'beta' | 'dev')}>
+                  <option value="stable">Estavel</option><option value="beta">Beta</option><option value="dev">Desenvolvimento</option>
+                </select>
+              </label>
+              <label className="setup-toggle"><input type="checkbox" checked={autostart} onChange={(event) => setAutostartChoice(event.target.checked)} /><span>Iniciar com o sistema</span></label>
+            </div>
+            <footer className="permission-footer">
+              <button className="primary-button" type="button" onClick={() => void finishSetup()}>Concluir</button>
             </footer>
           </section>
         </div>

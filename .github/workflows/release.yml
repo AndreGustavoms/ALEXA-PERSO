@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate tag and version
+        shell: bash
+        run: |
+          test "${GITHUB_REF_NAME#v}" = "$(tr -d '\r\n' < VERSION)"
+          test "$(node -p "require('./package.json').version")" = "$(tr -d '\r\n' < VERSION)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y libportaudio2 espeak-ng
+      - run: python -m pip install -r assistant_runtime/requirements.txt
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: python -m unittest discover -s assistant_runtime/tests -v
+
+  windows-x64:
+    needs: validate
+    runs-on: windows-latest
+    env:
+      WINDOWS_SIGNING_ENABLED: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: python -m pip install -r assistant_runtime/requirements.txt -r requirements-build.txt
+      - run: npm ci
+      - run: npm run build
+      - run: python assistant_runtime/setup_model.py
+      - run: python scripts/build_desktop.py --skip-web --skip-model
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          if (-not (Test-Path '${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe')) {
+            choco install innosetup --yes --no-progress
+          }
+      - name: Build installer
+        shell: powershell
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
+          $isccPath = if ($iscc) { $iscc.Source } else { '${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe' }
+          & $isccPath "/DAppVersion=$version" "/DSourceRoot=$env:GITHUB_WORKSPACE" "/DOutputRoot=$env:GITHUB_WORKSPACE\build\installers" packaging\windows\Doktor.iss
+      - name: Sign installer
+        if: env.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: powershell
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $cert = Join-Path $env:RUNNER_TEMP certificate.pfx
+          [IO.File]::WriteAllBytes($cert, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $installer = Get-ChildItem build\installers\Doktor-*-win-x64.exe | Select-Object -First 1
+          & signtool.exe sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $cert /p $env:WINDOWS_CERTIFICATE_PASSWORD $installer.FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: build/installers/Doktor-*-win-x64.exe
+          if-no-files-found: error
+
+  linux:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            artifact: linux-x64
+          - runner: ubuntu-24.04-arm
+            artifact: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y libportaudio2 espeak-ng
+      - run: python -m pip install -r assistant_runtime/requirements.txt -r requirements-build.txt
+      - run: npm ci
+      - run: npm run build
+      - run: python assistant_runtime/setup_model.py
+      - run: python scripts/build_desktop.py --skip-web --skip-model
+      - run: bash packaging/linux/build-packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            build/installers/*.AppImage
+            build/installers/*.deb
+          if-no-files-found: error
+
+  publish:
+    needs: [windows-x64, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: release-assets
+        run: sha256sum Doktor-* > SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" release-assets/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "Doktor $GITHUB_REF_NAME" "${flags[@]}"

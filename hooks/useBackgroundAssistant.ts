@@ -46,6 +46,8 @@ export interface AssistantAction {
 }
 
 export interface BackgroundAssistantState {
+  audioLevel?: number;
+  autostart?: boolean;
   connected: boolean;
   enabled: boolean;
   error: string;
@@ -57,6 +59,17 @@ export interface BackgroundAssistantState {
   sequence: number;
   transcript: string;
   wakePhrase: string;
+  version?: string;
+  settings?: {
+    microphone_device: number | null;
+    onboarding_complete: boolean;
+    update_channel: 'stable' | 'beta' | 'dev';
+  };
+  update?: {
+    available: boolean;
+    latestVersion: string;
+    releaseUrl: string;
+  };
   sttProvider?: string;
   voiceMetrics?: {
     activations: number;
@@ -173,10 +186,38 @@ export function useBackgroundAssistant({
     setState(nextState);
   }, []);
 
+  const updateSettings = useCallback(async (settings: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/settings`, {
+      body: JSON.stringify(settings),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      throw new Error(payload.error || 'Nao foi possivel salvar as configuracoes.');
+    }
+    return response.json();
+  }, []);
+
+  const setAutostart = useCallback(async (enabled: boolean) => {
+    const response = await fetch(`${API_BASE_URL}/autostart`, {
+      body: JSON.stringify({ enabled }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error('Nao foi possivel alterar a inicializacao automatica.');
+    }
+    const nextState = (await response.json()) as BackgroundAssistantState;
+    setState(nextState);
+  }, []);
+
   return {
     isConnected: state !== null,
     setListening,
     setPermission,
+    setAutostart,
+    updateSettings,
     state,
   };
 }
