@@ -93,8 +93,23 @@ class TranscriptAccumulator:
 
     def add(self, text: str) -> None:
         clean = text.strip()
-        if clean:
+        if not clean:
+            return
+        if not self._segments:
             self._segments.append(clean)
+            return
+
+        # Vosk can repeat the last words when it closes a segment after a
+        # pause. Merge the largest word overlap instead of duplicating it.
+        previous_words = self._segments[-1].split()
+        current_words = clean.split()
+        overlap = 0
+        for size in range(1, min(5, len(previous_words), len(current_words)) + 1):
+            if [word.casefold() for word in previous_words[-size:]] == [
+                word.casefold() for word in current_words[:size]
+            ]:
+                overlap = size
+        self._segments.append(" ".join(current_words[overlap:]) or clean)
 
     def preview(self, partial: str = "") -> str:
         clean_partial = partial.strip()

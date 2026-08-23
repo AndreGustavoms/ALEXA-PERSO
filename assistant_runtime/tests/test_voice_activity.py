@@ -80,6 +80,12 @@ class VoiceActivitySessionTests(unittest.TestCase):
             "pesquisa no google por voice activity detection sem cortar frases",
         )
 
+    def test_removes_repeated_words_at_segment_boundary(self) -> None:
+        transcript = TranscriptAccumulator()
+        transcript.add("abra o youtube")
+        transcript.add("youtube para mim")
+        self.assertEqual(transcript.finish(), "abra o youtube para mim")
+
 
 if __name__ == "__main__":
     unittest.main()
