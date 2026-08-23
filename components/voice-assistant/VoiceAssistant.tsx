@@ -196,7 +196,7 @@ export function VoiceAssistant() {
     ? 'error'
     : isBackgroundConnected && !backgroundEnabled
       ? 'paused'
-      : backgroundMode === 'activated'
+      : backgroundMode === 'activated' || backgroundMode === 'wake_detected'
         ? 'activated'
         : backgroundMode === 'command' ||
             backgroundMode === 'listening' ||
@@ -220,6 +220,7 @@ export function VoiceAssistant() {
     isSpeaking ||
     backgroundMode === 'command' ||
     backgroundMode === 'activated' ||
+    backgroundMode === 'wake_detected' ||
     backgroundMode === 'listening' ||
     backgroundMode === 'speaking' ||
     backgroundMode === 'responding' ||

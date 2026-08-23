@@ -9,6 +9,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import unicodedata
 from ctypes import wintypes
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -26,22 +27,26 @@ try:
     from .commands import CommandExecutor
     from .permission_store import PermissionStore
     from .replies import create_assistant_reply
+    from .stt import STTEventType, SpeechToTextSession, create_stt_provider
     from .voice_activity import (
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
         TranscriptAccumulator,
     )
+    from .voice_metrics import VoiceMetrics
 except ImportError:  # Execucao direta pelo inicializador local.
     from commands import CommandExecutor
     from permission_store import PermissionStore
     from replies import create_assistant_reply
+    from stt import STTEventType, SpeechToTextSession, create_stt_provider
     from voice_activity import (
         TranscriptAccumulator,
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
     )
+    from voice_metrics import VoiceMetrics
 
 APP_NAME = "Doktor Assistant"
 WAKE_PHRASE = "Olá, Doktor"
@@ -60,6 +65,8 @@ LOGS_DIRECTORY = PROJECT_DIRECTORY / "runtime" / "logs"
 LOG_FILE = LOGS_DIRECTORY / "assistant.log"
 PERMISSION_FILE = PROJECT_DIRECTORY / "runtime" / "config" / "permissions.json"
 VOICE_CONFIG_FILE = PROJECT_DIRECTORY / "assistant_runtime" / "voice_config.json"
+STT_CONFIG_FILE = PROJECT_DIRECTORY / "assistant_runtime" / "stt_config.json"
+VOICE_METRICS_FILE = PROJECT_DIRECTORY / "runtime" / "config" / "voice-metrics.json"
 TRAY_ICON_PATH = PROJECT_DIRECTORY / "assets" / "doktor-assistant.png"
 AUTOSTART_DIRECTORY = (
     Path(os.environ.get("APPDATA", ""))
@@ -242,10 +249,12 @@ class AssistantRuntime:
         self.icon: pystray.Icon | None = None
         self.local_server: ThreadingHTTPServer | None = None
         self.speech_engine: pyttsx3.Engine | None = None
+        self.voice_metrics = VoiceMetrics(VOICE_METRICS_FILE)
 
     def snapshot(self) -> dict[str, Any]:
         with self.state_lock:
             snapshot = dict(self.state)
+        snapshot["voiceMetrics"] = self.voice_metrics.snapshot()
 
         last_action = snapshot.get("lastAction")
         if (
@@ -733,6 +742,206 @@ class AssistantRuntime:
                     model, sample_rate, wake=True
                 )
 
+    def run_hybrid_audio_session(
+        self,
+        model: vosk.Model,
+        configured_voice: VoiceActivityConfig,
+    ) -> None:
+        stt_provider, _stt_config = create_stt_provider(model, STT_CONFIG_FILE)
+        sample_rate = self.select_input_sample_rate(stt_provider.preferred_sample_rate)
+        voice_config = configured_voice.with_sample_rate(sample_rate)
+        audio_queue: queue.Queue[bytes] = queue.Queue(
+            maxsize=voice_config.frames_for(10.0)
+        )
+
+        def audio_callback(indata: bytes, frames: int, time_info: Any, status: Any):
+            del frames, time_info
+            if status:
+                logging.warning("Estado do microfone: %s", status)
+            try:
+                audio_queue.put_nowait(bytes(indata))
+            except queue.Full:
+                try:
+                    audio_queue.get_nowait()
+                    audio_queue.put_nowait(bytes(indata))
+                except queue.Empty:
+                    pass
+
+        wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
+        stt_session: SpeechToTextSession | None = None
+        voice_session: VoiceActivitySession | None = None
+        local_speech_ended = False
+        command_started_at = 0.0
+        captured_frames = 0
+        realtime_partial = ""
+        local_endpoint_at = 0.0
+
+        def reset_command_session() -> None:
+            nonlocal stt_session, voice_session, local_speech_ended
+            nonlocal captured_frames, realtime_partial, wake_recognizer
+            nonlocal local_endpoint_at
+            if stt_session:
+                stt_session.close()
+            stt_session = None
+            voice_session = None
+            local_speech_ended = False
+            captured_frames = 0
+            realtime_partial = ""
+            local_endpoint_at = 0.0
+            wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
+
+        with sd.RawInputStream(
+            samplerate=sample_rate,
+            blocksize=voice_config.frame_samples,
+            device=None,
+            dtype="int16",
+            channels=1,
+            callback=audio_callback,
+        ):
+            self.update_state(
+                error="",
+                mode="wake",
+                partial="",
+                sttProvider=stt_provider.name,
+            )
+            logging.info(
+                "Pipeline hibrido iniciado em %s Hz; STT=%s.",
+                sample_rate,
+                stt_provider.name,
+            )
+
+            while not self.stop_event.is_set():
+                if self.reset_recognizer.is_set():
+                    self.reset_recognizer.clear()
+                    self.drain_audio(audio_queue)
+                    reset_command_session()
+
+                if not self.listening_enabled.is_set():
+                    self.update_state(mode="paused", partial="")
+                    self.stop_event.wait(0.2)
+                    self.drain_audio(audio_queue)
+                    continue
+
+                try:
+                    data = audio_queue.get(timeout=0.25)
+                except queue.Empty:
+                    continue
+
+                if stt_session is None:
+                    if not wake_recognizer.AcceptWaveform(data):
+                        continue
+                    candidate = self.extract_result(wake_recognizer.Result())
+                    if not self.contains_wake_phrase(candidate):
+                        continue
+
+                    self.voice_metrics.activation()
+                    self.update_state(error="", mode="wake_detected", partial="")
+                    self.play_activation_sound()
+                    self.speak_feedback("Sim, pode falar.")
+                    self.drain_audio(audio_queue)
+                    stt_session = stt_provider.start_session(sample_rate)
+                    voice_session = VoiceActivitySession(voice_config)
+                    command_started_at = time.monotonic()
+                    captured_frames = 0
+                    local_speech_ended = False
+                    local_endpoint_at = 0.0
+                    realtime_partial = ""
+                    self.update_state(
+                        error="",
+                        mode="activated",
+                        partial="",
+                        sttProvider=(
+                            stt_provider.name
+                            if stt_session.is_realtime
+                            else "vosk-local"
+                        ),
+                    )
+                    logging.info(
+                        "Wake detectada; realtime=%s.", stt_session.is_realtime
+                    )
+                    continue
+
+                if voice_session is None:
+                    raise RuntimeError("Sessao VAD ausente durante a captura.")
+
+                voice_event = VoiceActivityEvent.SPEECH
+                if not local_speech_ended:
+                    voice_event = voice_session.accept(data)
+                captured_frames += 1
+                stt_session.send_audio(data)
+
+                completed_text = ""
+                cloud_completed = False
+                for stt_event in stt_session.poll():
+                    if stt_event.type is STTEventType.SPEECH_STARTED:
+                        self.update_state(mode="listening")
+                    elif stt_event.type is STTEventType.PARTIAL and stt_event.text:
+                        if stt_session.is_realtime:
+                            realtime_partial += stt_event.text
+                            self.update_state(partial=realtime_partial.strip())
+                        else:
+                            self.update_state(partial=stt_event.text)
+                    elif stt_event.type is STTEventType.COMPLETED:
+                        completed_text = stt_event.text.strip()
+                        cloud_completed = bool(completed_text)
+                    elif stt_event.type is STTEventType.ERROR:
+                        self.voice_metrics.error()
+                        logging.error("Falha no STT Realtime: %s", stt_event.error)
+
+                if voice_event is VoiceActivityEvent.START_TIMEOUT:
+                    logging.info("Ativacao cancelada: nenhuma fala detectada.")
+                    self.drain_audio(audio_queue)
+                    reset_command_session()
+                    self.update_state(mode="wake", partial="")
+                    continue
+
+                if voice_event is VoiceActivityEvent.SPEECH_STARTED:
+                    self.update_state(mode="listening")
+
+                if voice_event is VoiceActivityEvent.SPEECH_ENDED:
+                    local_speech_ended = True
+                    local_endpoint_at = time.monotonic()
+                    logging.info("Endpoint local detectado; aguardando Semantic VAD.")
+
+                if (
+                    local_speech_ended
+                    and stt_session.is_realtime
+                    and time.monotonic() - local_endpoint_at > 10.0
+                ):
+                    logging.error("Semantic VAD excedeu o limite de recuperacao.")
+                    self.voice_metrics.error()
+                    stt_session.fallback_to_local()
+
+                should_finish = cloud_completed or (
+                    local_speech_ended and not stt_session.is_realtime
+                )
+                if not should_finish:
+                    continue
+
+                command_text = completed_text or stt_session.local_result()
+                latency_ms = int((time.monotonic() - command_started_at) * 1_000)
+                audio_seconds = (
+                    captured_frames * voice_config.frame_duration_ms / 1_000
+                )
+                provider_name = stt_provider.name if cloud_completed else "vosk-local"
+                self.voice_metrics.transcription(
+                    provider=provider_name,
+                    audio_seconds=audio_seconds,
+                    latency_ms=latency_ms,
+                    fallback=stt_provider.name != "vosk-local" and not cloud_completed,
+                )
+                if command_text:
+                    self.update_state(mode="processing", partial="")
+                    self.speak_feedback("Entendi, processando.")
+                    self.drain_audio(audio_queue)
+                    self.complete_command(command_text, audio_queue)
+                else:
+                    self.voice_metrics.error()
+                    self.drain_audio(audio_queue)
+                    self.update_state(mode="wake", partial="")
+
+                reset_command_session()
+
     def listen_forever(self) -> None:
         try:
             if not MODEL_DIRECTORY.exists():
@@ -751,7 +960,7 @@ class AssistantRuntime:
         reported_microphone_error = False
         while not self.stop_event.is_set():
             try:
-                self.run_audio_session(model, voice_config)
+                self.run_hybrid_audio_session(model, voice_config)
                 return
             except Exception as error:
                 if self.stop_event.is_set():

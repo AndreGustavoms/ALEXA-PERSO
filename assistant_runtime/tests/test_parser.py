@@ -100,6 +100,27 @@ class IntentParserTests(unittest.TestCase):
 
         self.assertEqual(parsed.spec.id, "assistant.ambiguous_close")  # type: ignore[union-attr]
 
+    def test_close_named_web_target_closes_current_browser_tab(self) -> None:
+        parsed = self.parser.parse("fecha o YouTube", self.browser)
+        self.assertEqual(parsed.spec.id, "browser.close_tab")  # type: ignore[union-attr]
+
+    def test_prompt_voice_phrase_matrix(self) -> None:
+        cases = {
+            "abre o Chrome": "application.open",
+            "fecha o YouTube": "browser.close_tab",
+            "abre meu projeto": "files.open_folder",
+            "abaixa o volume para cinquenta por cento": "audio.set_volume",
+            "abre o GitHub do DoktorDev": "browser.open_github_profile",
+        }
+        for phrase, intent_id in cases.items():
+            with self.subTest(phrase=phrase):
+                self.assert_intent(phrase, intent_id)
+
+        volume = self.parser.parse(
+            "abaixa o volume para cinquenta por cento", self.browser
+        )
+        self.assertEqual(volume.parameters["value"], 50)  # type: ignore[union-attr]
+
 
 if __name__ == "__main__":
     unittest.main()

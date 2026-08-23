@@ -1,0 +1,8 @@
+{
+  "provider": "auto",
+  "realtime_model": "gpt-4o-transcribe",
+  "language": "pt",
+  "noise_reduction": "near_field",
+  "semantic_vad_eagerness": "low",
+  "vocabulary_file": "transcription_vocabulary.txt"
+}

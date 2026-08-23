@@ -12,6 +12,7 @@ from .context import WindowContextProvider
 from .history import CommandHistory
 from .models import CommandResult, ParsedIntent, RiskLevel, WindowContext
 from .parser import IntentParser
+from .router import CommandRouter
 
 
 class CommandExecutor:
@@ -46,6 +47,7 @@ class CommandExecutor:
             action_options["text_sender"] = text_sender
         self.actions = WindowsActions(**action_options)  # type: ignore[arg-type]
         self.parser = IntentParser()
+        self.router = CommandRouter(self.parser)
         self.confirmations = ConfirmationManager(confirmation_timeout)
         self.history = CommandHistory()
         provider = WindowContextProvider()
@@ -72,14 +74,17 @@ class CommandExecutor:
             )
 
         context = self._safe_context()
-        intent = (
-            confirmation.intent
-            if confirmation.state == "confirmed"
-            else self.parser.parse(transcript, context)
+        intents = (
+            (confirmation.intent,)
+            if confirmation.state == "confirmed" and confirmation.intent
+            else self.router.parse(transcript, context)
         )
-        if intent is None:
+        if not intents:
             self._log(transcript, None, False, "not_matched")
             return CommandResult(False, False, "")
+        if len(intents) > 1:
+            return self._execute_batch(transcript, intents, context, authorized)
+        intent = intents[0]
 
         if intent.spec.executor == "clarify":
             return self._execute_intent(transcript, intent, context)
@@ -107,6 +112,86 @@ class CommandExecutor:
             return result
 
         return self._execute_intent(transcript, intent, context)
+
+    def _execute_batch(
+        self,
+        transcript: str,
+        intents: tuple[ParsedIntent, ...],
+        context: WindowContext,
+        authorized: bool,
+    ) -> CommandResult:
+        if not authorized:
+            return CommandResult(
+                True,
+                False,
+                "Reconheci os comandos, mas a permissao para acoes locais nao foi ativada.",
+                "command.batch",
+                "Comandos compostos",
+                status="permission_required",
+            )
+        unsafe = next(
+            (
+                intent
+                for intent in intents
+                if intent.spec.risk
+                in {RiskLevel.CONFIRMATION_REQUIRED, RiskLevel.BLOCKED}
+            ),
+            None,
+        )
+        if unsafe:
+            if unsafe.spec.risk == RiskLevel.BLOCKED:
+                return self._result(
+                    unsafe,
+                    False,
+                    unsafe.spec.error_message or "Um dos comandos foi bloqueado.",
+                    "blocked",
+                )
+            self.confirmations.request(unsafe)
+            return self._result(
+                unsafe,
+                False,
+                "O pedido contem uma acao sensivel. Confirme essa acao separadamente.",
+                "awaiting_confirmation",
+            )
+
+        unavailable = next(
+            (
+                intent
+                for intent in intents
+                if intent.spec.id == "application.open"
+                and not self.actions.apps.resolve(
+                    str(intent.parameters.get("application", ""))
+                )
+            ),
+            None,
+        )
+        if unavailable:
+            target = unavailable.parameters.get("application", "o aplicativo")
+            return self._result(
+                unavailable,
+                False,
+                f"Nao encontrei {target}. Nenhum comando foi executado.",
+                "error",
+            )
+
+        results = [
+            self._execute_intent(transcript, intent, context) for intent in intents
+        ]
+        executed = all(result.executed for result in results)
+        response = "Pronto." if executed else next(
+            (result.response for result in results if not result.executed),
+            "Nao consegui concluir todos os comandos.",
+        )
+        return CommandResult(
+            matched=True,
+            executed=executed,
+            response=response,
+            action="command.batch",
+            intent_name="Comandos compostos",
+            status="completed" if executed else "error",
+            parameters={"actions": [result.action for result in results]},
+            confidence=min(result.confidence for result in results),
+        )
 
     def _execute_intent(
         self,

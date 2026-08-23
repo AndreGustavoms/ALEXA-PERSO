@@ -29,10 +29,11 @@ GitHub CLI autenticado para permitir atualizacoes sem Git.
 ## Usar
 
 1. Diga `Ola, Doktor`.
-2. Aguarde o sinal sonoro.
+2. Aguarde o sinal sonoro e `Sim, pode falar`.
 3. Comece a falar em ate sete segundos.
 4. Depois que a fala comeca, nao existe limite de duracao.
-5. Cerca de um segundo de silencio continuo encerra o comando.
+5. Com OpenAI ativa, o Semantic VAD decide quando a frase terminou. No modo
+   local, cerca de um segundo de silencio continuo encerra o comando.
 
 Somente a frase de ativacao `Ola, Doktor` abre a escuta de comandos.
 
@@ -51,6 +52,23 @@ Exemplos implementados:
 - `Abra Downloads`, `abra o Bluetooth` ou `tira um print`.
 - `Que horas sao?`, `qual a data` ou `que dia da semana e hoje?`.
 - `Desligue o computador` pede confirmacao antes de agir.
+- `Feche o YouTube e depois abra o Spotify` executa as duas intencoes em ordem.
+
+## Transcricao de alta precisao
+
+O Doktor funciona sem conta externa usando Vosk local. Para ativar a
+transcricao OpenAI Realtime com `gpt-4o-transcribe`, Semantic VAD e reducao de
+ruido, execute `CONFIGURAR_OPENAI.cmd` e informe sua `OPENAI_API_KEY`. A chave e
+protegida pelo DPAPI da sua conta do Windows e nunca e enviada para a interface.
+
+O modo `auto` usa OpenAI apenas depois da wake word. Se a chave, rede ou API
+falhar, o mesmo audio ja esta sendo processado pelo Vosk e o comando continua
+localmente. O audio bruto fica somente em memoria e nao e salvo em disco.
+
+Edite `assistant_runtime/transcription_vocabulary.txt` para acrescentar nomes
+de programas, projetos e termos recorrentes. O perfil de microfone e configurado
+em `assistant_runtime/stt_config.json`: use `near_field` para headset e
+`far_field` para microfone de notebook ou distante.
 
 `Feche esta pagina` fecha somente a aba atual quando um navegador esta em
 foco. `Feche o Chrome` e uma intencao diferente, direcionada ao aplicativo
@@ -87,16 +105,26 @@ uma janela local do Chrome ou Edge. A pagina tambem fica disponivel em
 - `assistant_runtime/permission_store.py`: consentimento local persistente.
 - `assistant_runtime/voice_activity.py`: VAD, inicio e fim dinamicos da fala.
 - `assistant_runtime/voice_config.json`: parametros editaveis da captura de voz.
+- `assistant_runtime/stt.py`: provedores Vosk/OpenAI, Semantic VAD e fallback.
+- `assistant_runtime/stt_config.json`: modelo, idioma e perfil de ruido.
+- `assistant_runtime/transcription_vocabulary.txt`: contexto extensivel do STT.
+- `assistant_runtime/voice_metrics.py`: metricas agregadas, sem audio bruto.
+- `assistant_runtime/assistant_commands/router.py`: comandos simples e compostos.
 - `App.tsx`, `components/` e `app/globals.css`: interface responsiva em React.
 - `hooks/`: integracoes isoladas com o runtime local e APIs de voz do navegador.
 - `lib/`: respostas iniciais e mensagens de erro.
 - `scripts/install-assistant.ps1`: instalacao, build, atalho e inicializacao.
 - `runtime/`: modelo e logs gerados localmente, fora do Git.
 
-O runtime usa duas etapas: uma gramatica pequena fica ouvindo apenas a frase de
-ativacao; depois do sinal sonoro, o reconhecedor completo e o WebRTC VAD captam
-o comando. O prazo vale apenas para iniciar a fala. Depois disso, o VAD tolera
-pausas naturais e encerra somente apos silencio continuo, sem duracao maxima.
+O runtime usa um pipeline hibrido. Uma gramatica Vosk pequena fica ouvindo
+localmente apenas a frase de ativacao. Depois dela, a sessao Realtime recebe
+somente o comando e usa reducao de ruido, contexto em portugues e Semantic VAD.
+O Vosk roda em paralelo como fallback, sem prazo maximo depois do inicio da fala.
+
+As metricas agregadas ficam em `runtime/config/voice-metrics.json`: ativacoes,
+duracao enviada, latencia, erros e fallbacks. O custo estimado permanece nulo
+porque a cobranca oficial do modelo e por tokens de audio, nao por uma taxa fixa
+confiavel por minuto no cliente.
 
 Os valores ficam centralizados em `assistant_runtime/voice_config.json`:
 

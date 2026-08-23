@@ -1,0 +1,24 @@
+Doktor
+DoktorDev
+Visual Studio Code
+VS Code
+GitHub
+Git
+Railway
+Discord
+Spotify
+WhatsApp
+YouTube
+Valorant
+Chrome
+Edge
+PowerShell
+CMD
+Windows
+npm
+pnpm
+Node.js
+Python
+React
+Next.js
+TypeScript

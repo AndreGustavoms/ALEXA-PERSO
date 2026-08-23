@@ -161,6 +161,30 @@ class CommandExecutorTests(unittest.TestCase):
         self.assertTrue(entered.executed)
         self.assertEqual(self.shortcuts, [("ENTER",)])
 
+    def test_routes_and_executes_compound_command_in_order(self) -> None:
+        result = self.executor.execute(
+            "fecha o YouTube e depois abre o GitHub",
+            authorized=True,
+        )
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.action, "command.batch")
+        self.assertEqual(self.shortcuts, [("CTRL", "W")])
+        self.assertEqual(self.resources, ["https://github.com"])
+        self.assertEqual(result.parameters["actions"], [
+            "browser.close_tab",
+            "browser.open_site",
+        ])
+
+    def test_never_partially_executes_unrecognized_compound_command(self) -> None:
+        result = self.executor.execute(
+            "abre o YouTube e depois abre o teletransportador quantum",
+            authorized=True,
+        )
+
+        self.assertFalse(result.executed)
+        self.assertEqual(self.resources, [])
+
 
 if __name__ == "__main__":
     unittest.main()

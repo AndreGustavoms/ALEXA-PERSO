@@ -8,6 +8,7 @@ const POLLING_INTERVAL_MS = 600;
 export type BackgroundAssistantMode =
   | 'starting'
   | 'wake'
+  | 'wake_detected'
   | 'command'
   | 'activated'
   | 'listening'
@@ -56,6 +57,17 @@ export interface BackgroundAssistantState {
   sequence: number;
   transcript: string;
   wakePhrase: string;
+  sttProvider?: string;
+  voiceMetrics?: {
+    activations: number;
+    transcriptions: number;
+    errors: number;
+    fallbacks: number;
+    audioSeconds: number;
+    lastLatencyMs: number;
+    lastProvider: string;
+    estimatedCostUsd: number | null;
+  };
 }
 
 interface BackgroundInteraction {

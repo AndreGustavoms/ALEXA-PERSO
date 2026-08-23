@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from urllib.parse import urlparse
 
 from .models import CommandSpec, ParsedIntent, WindowContext
@@ -34,6 +35,7 @@ FOLDERS = {
     "area de trabalho": ("Area de Trabalho", "shell:Desktop"),
     "capturas de tela": ("Capturas de Tela", "shell:Screenshots"),
     "screenshots": ("Capturas de Tela", "shell:Screenshots"),
+    "meu projeto": ("Projeto Doktor", str(Path(__file__).resolve().parents[2])),
 }
 
 SETTINGS = {
@@ -142,11 +144,14 @@ class IntentParser:
             )
 
         volume = re.fullmatch(
-            r"(?:(?:coloca|deixa)(?: o volume)? em |(?:o )?volume(?: em| no)? )(\d{1,3})(?: por cento)?",
+            r"(?:(?:coloca|deixa|abaixa|reduz)(?: o volume)? (?:em|para) |"
+            r"(?:o )?volume(?: em| no| para)? )(.+)",
             text,
         )
         if volume:
-            value = int(volume.group(1))
+            value = extract_percent(volume.group(1))
+            if value is None:
+                return None
             if value > 100:
                 return self._dynamic("audio.invalid_volume", "Validar volume", "Audio", "clarify", {}, "O volume precisa estar entre 0 e 100.")
             return self._dynamic("audio.set_volume", "Definir volume", "Audio", "set_volume", {"value": value}, "Volume em {value}%.")
@@ -243,6 +248,21 @@ class IntentParser:
                 label, target = WEBSITES[site_name]
                 return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
 
+        github_profile = re.fullmatch(
+            rf"{OPEN_WORDS} (?:o )?github (?:do|da|de) (.+)", text
+        )
+        if github_profile:
+            account = re.sub(r"[^a-z0-9-]", "", github_profile.group(1))
+            if account:
+                return self._dynamic(
+                    "browser.open_github_profile",
+                    f"Abrir GitHub de {account}",
+                    "Navegador",
+                    "open_resource",
+                    {"target": f"https://github.com/{account}"},
+                    f"Abri o GitHub de {account}.",
+                )
+
         # Speech recognition can omit the verb (for example: "o youtube").
         # Keep the well-known web destinations usable without opening arbitrary text.
         bare_site = re.fullmatch(r"(?:o |a |no |na )?(.+)", text)
@@ -253,6 +273,23 @@ class IntentParser:
                 return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
 
         close_app = re.fullmatch(rf"{CLOSE_WORDS} (?:o |a )?(.+)", text)
+        if (
+            close_app
+            and close_app.group(1).strip() in WEBSITES
+            and context
+            and context.kind == "browser"
+        ):
+            target = close_app.group(1).strip()
+            label = WEBSITES[target][0]
+            return self._dynamic(
+                "browser.close_tab",
+                f"Fechar {label}",
+                "Navegador",
+                "shortcut",
+                {"keys": ("CTRL", "W"), "context": "browser"},
+                f"Fechei o {label}.",
+                risk="contextual",
+            )
         contextual_targets = {
             "isso", "aqui", "essa pagina", "esta pagina", "pagina atual",
             "essa aba", "esta aba", "aba atual", "essa janela", "esta janela",
