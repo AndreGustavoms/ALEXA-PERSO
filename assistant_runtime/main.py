@@ -1031,6 +1031,11 @@ class AssistantRuntime:
                         voice_session.accept(buffered_frame)
                         stt_session.send_audio(buffered_frame)
                         captured_frames += 1
+                    if voice_session.has_started:
+                        self.update_state(
+                            mode="listening",
+                            voiceEvent="speech.started",
+                        )
                     pre_roll.clear()
                     self.play_activation_sound()
                     logging.info(
