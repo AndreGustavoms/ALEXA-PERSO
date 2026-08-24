@@ -1,0 +1,112 @@
+{"text":"fecha o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"pode fechar o YouTube pra mim","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"encerra o yutube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"finaliza o iutube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"tira o you tube dai","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"Doktor fecha esse YouTube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"remove o youtube da tela","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"fecha essa aba","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha isso","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha ai pra mim","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha isso","context":"none","previousTarget":"spotify","intent":"CLOSE_APPLICATION","target":"spotify"}
+{"text":"encerra esse programa","context":"application_spotify","intent":"CLOSE_APPLICATION","target":"spotify"}
+{"text":"fecha o spotify","context":"application_spotify","intent":"CLOSE_APPLICATION","target":"spotify"}
+{"text":"fecha o spotfy","context":"application_spotify","intent":"CLOSE_APPLICATION","target":"spotify"}
+{"text":"fecha o crome","context":"application_code","intent":"CLOSE_APPLICATION","target":"chrome"}
+{"text":"abre o youtube","context":"application_code","intent":"OPEN_YOUTUBE","target":"youtube"}
+{"text":"entra no YouTube","context":"application_code","intent":"OPEN_YOUTUBE","target":"youtube"}
+{"text":"abre github.com","context":"application_code","intent":"OPEN_URL","target":"github"}
+{"text":"abre o site do github","context":"application_code","intent":"OPEN_URL","target":"github"}
+{"text":"abre o spotify","context":"application_code","intent":"OPEN_APPLICATION","target":"spotify"}
+{"text":"inicia o spotifi","context":"application_code","intent":"OPEN_APPLICATION","target":"spotify"}
+{"text":"abre o valor antes","context":"application_code","intent":"OPEN_APPLICATION","target":"valorant"}
+{"text":"bota o chrome","context":"application_code","intent":"OPEN_APPLICATION","target":"chrome"}
+{"text":"pesquisa GTA 6","context":"browser_youtube","intent":"SEARCH_WEB"}
+{"text":"pesquisa GTA 6 no youtube","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"procura clima em sao paulo","context":"browser_youtube","intent":"SEARCH_WEB"}
+{"text":"minimiza isso","context":"application_code","intent":"MINIMIZE_APPLICATION"}
+{"text":"maximiza essa janela","context":"application_code","intent":"MAXIMIZE_APPLICATION"}
+{"text":"aumenta o volume","context":"application_code","intent":"VOLUME_UP"}
+{"text":"abaixa o volume","context":"application_code","intent":"VOLUME_DOWN"}
+{"text":"volume 35","context":"application_code","intent":"SET_VOLUME"}
+{"text":"muta","context":"application_code","intent":"MUTE"}
+{"text":"desmuta","context":"application_code","intent":"UNMUTE"}
+{"text":"proxima musica","context":"application_code","intent":"NEXT"}
+{"text":"musica anterior","context":"application_code","intent":"PREVIOUS"}
+{"text":"play","context":"application_code","intent":"PLAY"}
+{"text":"pausa","context":"application_code","intent":"PLAY"}
+{"text":"eu fechei o youtube ontem","context":"browser_youtube","intent":"NONE"}
+{"text":"sera que eu deveria fechar o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"como fecha o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"nao fecha o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"não feche o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"o youtube fechou sozinho","context":"browser_youtube","intent":"NONE"}
+{"text":"por que fechar o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"quando fechar o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"eu nao quero fechar o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"voce fechou o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"ele encerrou o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"ela finalizou o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"gosto de fechar ciclos","context":"browser_youtube","intent":"NONE"}
+{"text":"tutorial de como fechar youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"spotify e legal","context":"application_spotify","intent":"NONE"}
+{"text":"o programa esta aberto","context":"application_code","intent":"NONE"}
+{"text":"pode ser","context":"application_code","intent":"NONE"}
+{"text":"youtube","context":"application_code","intent":"OPEN_YOUTUBE","target":"youtube"}
+{"text":"fecha youtube rapidinho","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"consegue fechar o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"voce pode fechar o yutube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"quero que feche o iutube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"fecha esse you tube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"encerre o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"finalize o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"tire o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"pode tirar o youtube por favor","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"sai do youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"Doktor pode fechar o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"ola doktor fecha o youtube","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"po Doktor fecha o youtube pra mim","context":"browser_youtube","intent":"CLOSE_APPLICATION","target":"youtube"}
+{"text":"fecha essa pagina","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha a pagina atual","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha a aba atual","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"pode fechar isso","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"encerra isso","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"tira isso daqui","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha ele","context":"browser_youtube","intent":"CLOSE_APPLICATION"}
+{"text":"fecha o discord","context":"application_code","intent":"CLOSE_APPLICATION","target":"discord"}
+{"text":"encerra o steam","context":"application_code","intent":"CLOSE_APPLICATION","target":"steam"}
+{"text":"finaliza o valorant","context":"application_code","intent":"CLOSE_APPLICATION","target":"valorant"}
+{"text":"fecha o whats app","context":"application_code","intent":"CLOSE_APPLICATION","target":"whats app"}
+{"text":"fecha o google chrome","context":"application_code","intent":"CLOSE_APPLICATION","target":"chrome"}
+{"text":"abre youtube pra mim","context":"application_code","intent":"OPEN_YOUTUBE","target":"youtube"}
+{"text":"pode abrir o youtube","context":"application_code","intent":"OPEN_YOUTUBE","target":"youtube"}
+{"text":"bota o youtube","context":"application_code","intent":"OPEN_YOUTUBE","target":"youtube"}
+{"text":"abre o github","context":"application_code","intent":"OPEN_URL","target":"github"}
+{"text":"entra no gmail","context":"application_code","intent":"OPEN_URL","target":"gmail"}
+{"text":"acessa o instagram","context":"application_code","intent":"OPEN_URL","target":"instagram"}
+{"text":"abre netflix","context":"application_code","intent":"OPEN_URL","target":"netflix"}
+{"text":"abre o discord","context":"application_code","intent":"OPEN_APPLICATION","target":"discord"}
+{"text":"inicia steam","context":"application_code","intent":"OPEN_APPLICATION","target":"steam"}
+{"text":"abre o whats app","context":"application_code","intent":"OPEN_APPLICATION","target":"whats app"}
+{"text":"abre visual studio code","context":"application_code","intent":"OPEN_APPLICATION","target":"vs code"}
+{"text":"pesquise receitas de bolo","context":"browser_youtube","intent":"SEARCH_WEB"}
+{"text":"procure manual do mundo no youtube","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"busca noticias de tecnologia","context":"browser_youtube","intent":"SEARCH_WEB"}
+{"text":"aumenta 10","context":"application_code","intent":"VOLUME_UP"}
+{"text":"diminui o volume","context":"application_code","intent":"VOLUME_DOWN"}
+{"text":"coloca o volume em 50 por cento","context":"application_code","intent":"SET_VOLUME"}
+{"text":"silencia o audio","context":"application_code","intent":"MUTE"}
+{"text":"tira o som do mudo","context":"application_code","intent":"UNMUTE"}
+{"text":"toca a proxima musica","context":"application_code","intent":"NEXT"}
+{"text":"volta a musica","context":"application_code","intent":"PREVIOUS"}
+{"text":"pode pausar ai","context":"application_code","intent":"PLAY"}
+{"text":"como eu fecho o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"eu deveria fechar o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"nao encerra o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"não tira o youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"o spotify fechou ontem","context":"application_spotify","intent":"NONE"}
+{"text":"voce encerrou o chrome","context":"application_code","intent":"NONE"}
+{"text":"quando eu fechar o youtube aviso","context":"browser_youtube","intent":"NONE"}
+{"text":"por que o youtube fechou","context":"browser_youtube","intent":"NONE"}
+{"text":"sera que devo abrir o spotify","context":"application_code","intent":"NONE"}
+{"text":"eu gosto do youtube","context":"browser_youtube","intent":"NONE"}

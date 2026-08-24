@@ -33,4 +33,5 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: python -m unittest discover -s assistant_runtime/tests -v
+      - run: python -m assistant_runtime.intent_benchmark
       - run: python scripts/build_desktop.py --help

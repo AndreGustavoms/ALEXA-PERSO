@@ -10,6 +10,7 @@ from assistant_runtime.stt import (
     OpenAIRealtimeSTT,
     STTConfig,
     STTEventType,
+    load_contextual_vocabulary,
     load_vocabulary,
 )
 from assistant_runtime.secret_store import load_secret, save_secret
@@ -109,6 +110,21 @@ class STTTests(unittest.TestCase):
             [STTEventType.PARTIAL, STTEventType.COMPLETED],
         )
         self.assertEqual(session.local_result(), "abre o YouTube")
+
+    def test_contextual_vocabulary_adds_visible_apps_without_duplicates(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "stt.json"
+            (root / "words.txt").write_text("Spotify\nYouTube\n", encoding="utf-8")
+            config = STTConfig(vocabulary_file="words.txt")
+
+            vocabulary = load_contextual_vocabulary(
+                config_path,
+                config,
+                application_discoverer=lambda: ("spotify", "Visual Studio Code"),
+            )
+
+        self.assertEqual(vocabulary, ("Spotify", "YouTube", "Visual Studio Code"))
 
 
 if __name__ == "__main__":

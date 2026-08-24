@@ -43,6 +43,34 @@ def process_name_for_pid(process_id: int) -> str:
         kernel32.CloseHandle(handle)
 
 
+def visible_application_names(limit: int = 48) -> tuple[str, ...]:
+    """Return local app names only; window titles and document names stay private."""
+    if os.name != "nt":
+        return ()
+    names: list[str] = []
+    callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def collect(handle: int, _parameter: int) -> bool:
+        if len(names) >= limit or not ctypes.windll.user32.IsWindowVisible(handle):
+            return True
+        process_id = wintypes.DWORD()
+        ctypes.windll.user32.GetWindowThreadProcessId(handle, ctypes.byref(process_id))
+        process_name = process_name_for_pid(process_id.value)
+        if not process_name:
+            return True
+        label = (
+            BROWSER_PROCESSES.get(process_name)
+            or EXPLORER_PROCESSES.get(process_name)
+            or process_name.removesuffix(".exe").replace("_", " ").strip().title()
+        )
+        if label and label.casefold() not in {name.casefold() for name in names}:
+            names.append(label)
+        return True
+
+    ctypes.windll.user32.EnumWindows(callback_type(collect), 0)
+    return tuple(names)
+
+
 class WindowContextProvider:
     def current(self) -> WindowContext:
         if os.name != "nt":

@@ -29,7 +29,7 @@ ACTION_START = re.compile(
     r"reduz|reduzir|muta|desmuta|toca|tocar|pause|pausa|pausar|play|proxima|anterior)\b"
 )
 SOFTENERS = re.compile(
-    r"\b(?:por favor|pra mim|para mim|ai|rapidinho|por gentileza)\b"
+    r"\b(?:por favor|pra mim|para mim|ai|dai|rapidinho|por gentileza)\b"
 )
 CONTEXT_REFERENCES = re.compile(
     r"\b(?:ele|ela|esse negocio|essa coisa|isso daqui|isso ai)\b"
@@ -74,7 +74,7 @@ def normalize_natural_command(value: str) -> str:
         (r"^(?:encerra|encerre|encerrar|finaliza|finalize|finalizar|mata|matar)\b", "fecha"),
         (
             r"^(?:tira|tire|tirar)\s+"
-            r"(?!(?:um |uma )?(?:print|screenshot|captura)(?:\s|$))",
+            r"(?!(?:(?:um |uma )?(?:print|screenshot|captura)|(?:o )?som (?:do )?mudo)(?:\s|$))",
             "fecha ",
         ),
         (r"^(?:sai|sair)\s+(?:do|da|de)\b", "fecha"),

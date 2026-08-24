@@ -1,6 +1,6 @@
 {
   "name": "doktor-assistant",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint .",
-    "test:runtime": ".\\.venv\\Scripts\\python.exe -m unittest discover -s assistant_runtime/tests -v"
+    "test:runtime": ".\\.venv\\Scripts\\python.exe -m unittest discover -s assistant_runtime/tests -v",
+    "benchmark:intents": "python -m assistant_runtime.intent_benchmark"
   },
   "dependencies": {
     "lucide-react": "^1.33.0",

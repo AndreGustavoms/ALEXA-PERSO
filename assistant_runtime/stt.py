@@ -410,11 +410,42 @@ def load_vocabulary(config_path: Path, config: STTConfig) -> tuple[str, ...]:
     )
 
 
+def load_contextual_vocabulary(
+    config_path: Path,
+    config: STTConfig,
+    application_discoverer: Callable[[], tuple[str, ...]] | None = None,
+) -> tuple[str, ...]:
+    static_terms = load_vocabulary(config_path, config)
+    if application_discoverer is None:
+        try:
+            from .assistant_commands.context import visible_application_names
+        except ImportError:
+            from assistant_commands.context import visible_application_names
+
+        application_discoverer = visible_application_names
+    try:
+        dynamic_terms = application_discoverer()
+    except Exception:
+        logging.exception("Nao foi possivel gerar vocabulario dos aplicativos visiveis.")
+        dynamic_terms = ()
+
+    merged: list[str] = []
+    seen: set[str] = set()
+    for term in (*static_terms, *dynamic_terms):
+        clean = " ".join(str(term).split()).strip()
+        key = clean.casefold()
+        if clean and key not in seen:
+            seen.add(key)
+            merged.append(clean)
+    return tuple(merged[:128])
+
+
 def create_stt_provider(
     model: vosk.Model,
     config_path: Path,
 ) -> tuple[FallbackSTTProvider, STTConfig]:
     config = STTConfig.from_file(config_path)
+    vocabulary = load_contextual_vocabulary(config_path, config)
     local = LocalVoskSTT(model)
     primary: SpeechToTextProvider | None = None
     key_file = PATHS.config / "openai-key.bin"
@@ -425,7 +456,7 @@ def create_stt_provider(
     if should_use_openai and api_key:
         primary = OpenAIRealtimeSTT(
             config,
-            load_vocabulary(config_path, config),
+            vocabulary,
             api_key=api_key,
         )
     elif should_use_openai:

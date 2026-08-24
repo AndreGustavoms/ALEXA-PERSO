@@ -71,9 +71,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
     command("audio.volume_up", "Aumentar volume", "Audio", (r"(?:aumenta|aumente|sobe|suba|eleva) (?:o )?volume(?: em \d+)?",), "volume_relative", success="Aumentei o volume.", direction=1),
     command("audio.volume_down", "Diminuir volume", "Audio", (r"(?:abaixa|abaixe|diminui|diminua|reduz) (?:o )?volume(?: em \d+)?",), "volume_relative", success="Diminuí o volume.", direction=-1),
     command("audio.mute", "Silenciar audio", "Audio", (r"(?:muta|mute|silencia|silencie)(?: (?:o )?(?:som|audio|computador))?",), "set_mute", success="Som silenciado.", muted=True),
-    command("audio.unmute", "Ativar audio", "Audio", (r"(?:desmuta|tira|sai) (?:o som )?(?:do )?mudo",), "set_mute", success="Som ativado.", muted=False),
+    command("audio.unmute", "Ativar audio", "Audio", (r"desmuta(?: (?:o )?(?:som|audio))?", r"(?:tira|sai) (?:o som )?(?:do )?mudo"), "set_mute", success="Som ativado.", muted=False),
     command("media.play_pause", "Alternar reproducao", "Midia", (r"(?:play|pausa|pause|continua|continue|toca|tocar|pode tocar|reproduz|reproduza)(?: (?:a )?(?:musica|midia|video))?",), "media_key", success="Feito.", code=14),
-    command("media.next", "Proxima faixa", "Midia", (r"(?:proxima|proximo|avanca|avance)(?: (?:a )?(?:musica|faixa))?",), "media_key", success="Proxima faixa.", code=11),
+    command("media.next", "Proxima faixa", "Midia", (r"(?:proxima|proximo|avanca|avance)(?: (?:a )?(?:musica|faixa))?", r"toca (?:a )?proxima (?:musica|faixa)"), "media_key", success="Proxima faixa.", code=11),
     command("media.previous", "Faixa anterior", "Midia", (r"(?:volta|anterior)(?: (?:a )?(?:musica|faixa))", r"(?:musica|faixa) anterior"), "media_key", success="Faixa anterior.", code=12),
     command("media.stop", "Parar midia", "Midia", (r"para(?:r)? (?:a )?(?:musica|midia|reproducao)",), "media_key", success="Parei a reproducao.", code=13),
 

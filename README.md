@@ -90,7 +90,8 @@ em `assistant_runtime/stt_config.json`: use `near_field` para headset e
 
 `Feche esta pagina` fecha somente a aba atual quando um navegador esta em
 foco. `Feche o Chrome` e uma intencao diferente, direcionada ao aplicativo
-inteiro, e exige confirmacao porque pode haver trabalho nao salvo.
+inteiro. Fechamentos normais sao contextuais e imediatos; exclusao e acoes de
+sistema continuam exigindo confirmacao.
 
 Fechar a interface nao encerra o assistente. Use o icone na bandeja para abrir
 a interface, pausar a escuta, ativar ou desativar o inicio com o Windows e
@@ -134,8 +135,9 @@ uma janela local do Chrome ou Edge. A pagina tambem fica disponivel em
 - `scripts/install-assistant.ps1`: instalacao, build, atalho e inicializacao.
 - `runtime/`: modelo e logs gerados localmente, fora do Git.
 
-O runtime usa um pipeline hibrido. Uma gramatica Vosk pequena fica ouvindo
-localmente apenas a frase de ativacao. Depois dela, a sessao Realtime recebe
+O runtime usa um pipeline hibrido. O wake provider usa openWakeWord quando um
+modelo `ola_doktor.onnx` validado esta instalado e Vosk local como fallback.
+Depois da ativacao, a sessao Realtime recebe
 somente o comando e usa reducao de ruido, contexto em portugues e Semantic VAD.
 O Vosk roda em paralelo como fallback, sem prazo maximo depois do inicio da fala.
 
@@ -148,18 +150,22 @@ Os valores ficam centralizados em `assistant_runtime/voice_config.json`:
 
 ```json
 {
-  "activation_start_timeout": 7.0,
-  "speech_end_silence": 0.9,
-  "minimum_speech_duration": 0.24,
+  "activation_start_timeout": 12.0,
+  "speech_end_silence": 1.5,
+  "minimum_speech_duration": 0.06,
+  "pre_roll_duration": 0.75,
+  "end_padding_duration": 0.24,
   "maximum_phrase_duration": null,
-  "vad_aggressiveness": 3
+  "vad_engine": "silero",
+  "silero_threshold": 0.38,
+  "vad_aggressiveness": 0
 }
 ```
 
 A permissao total vale para as acoes registradas e para os privilegios da conta
 atual do Windows. Ela nao ignora o UAC. Desligamento, reinicio, encerramento de
-sessao, suspensao, hibernacao, fechamento explicito de aplicativo e exclusao de
-item exigem `sim` antes de executar; `nao`, `cancela` ou `deixa quieto` cancelam.
+sessao, suspensao, hibernacao e exclusao de item exigem `sim` antes de executar;
+`nao`, `cancela` ou `deixa quieto` cancelam.
 A confirmacao expira em 15 segundos. Formatacao e shell arbitrario permanecem
 bloqueados.
 

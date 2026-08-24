@@ -323,7 +323,7 @@ class IntentParser:
         else:
             site_name = ""
         if site_name in WEBSITES:
-            if site_name != "spotify" or re.search(r"\b(?:site|web)\b", text):
+            if site_name not in {"spotify", "whatsapp"} or re.search(r"\b(?:site|web)\b", text):
                 label, target = WEBSITES[site_name]
                 return self._dynamic("browser.open_site", f"Abrir {label}", "Navegador", "open_resource", {"target": target}, f"Abri o {label}.")
 
