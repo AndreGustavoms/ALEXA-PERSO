@@ -56,11 +56,11 @@ const statusContent: Record<
   },
   listening: {
     label: 'Ouvindo',
-    title: 'Ouvindo vocÃª...',
+    title: 'Ouvindo você...',
   },
   finalizing: {
     label: 'Finalizando',
-    title: 'Finalizando Ã¡udio',
+    title: 'Finalizando áudio',
   },
   transcribing: {
     label: 'Entendendo',
@@ -364,7 +364,7 @@ export function VoiceAssistant() {
       setIsSetupOpen(false);
       if (!permissionAccepted) setIsPermissionOpen(true);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Nao foi possivel concluir a configuracao.');
+      setError(caughtError instanceof Error ? caughtError.message : 'Não foi possível concluir a configuração.');
     }
   }
 
@@ -450,8 +450,8 @@ export function VoiceAssistant() {
                   className="icon-button"
                   type="button"
                   onClick={() => setIsSetupOpen(true)}
-                  aria-label="Configuracoes"
-                  title="Configuracoes"
+                  aria-label="Configurações"
+                  title="Configurações"
                 >
                   <Settings aria-hidden="true" />
                 </button>
@@ -679,25 +679,25 @@ export function VoiceAssistant() {
               <label>
                 <span>Microfone</span>
                 <select value={microphoneDevice ?? ''} onChange={(event) => setMicrophoneDevice(event.target.value === '' ? null : Number(event.target.value))}>
-                  <option value="">Padrao do sistema</option>
-                  {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.default ? ' (padrao)' : ''}</option>)}
+                  <option value="">Padrão do sistema</option>
+                  {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.default ? ' (padrão)' : ''}</option>)}
                 </select>
               </label>
-              <div className="level-field"><span>Nivel de entrada</span><div className="input-level"><i style={{ width: `${Math.min(100, (backgroundState?.audioLevel ?? 0) * 180)}%` }} /></div></div>
+              <div className="level-field"><span>Nível de entrada</span><div className="input-level"><i style={{ width: `${Math.min(100, (backgroundState?.audioLevel ?? 0) * 180)}%` }} /></div></div>
               {backgroundState?.voiceDiagnostics && (
                 <dl className="voice-diagnostics">
                   <div><dt>RAW RMS</dt><dd>{backgroundState.voiceDiagnostics.rawRms.toFixed(4)}</dd></div>
                   <div><dt>Processado</dt><dd>{backgroundState.voiceDiagnostics.processedRms.toFixed(4)}</dd></div>
-                  <div><dt>RuÃ­do</dt><dd>{backgroundState.voiceDiagnostics.noiseFloor.toFixed(4)}</dd></div>
+                  <div><dt>Ruído</dt><dd>{backgroundState.voiceDiagnostics.noiseFloor.toFixed(4)}</dd></div>
                   <div><dt>Ganho</dt><dd>{backgroundState.voiceDiagnostics.gain.toFixed(1)}x</dd></div>
                   <div><dt>VAD</dt><dd>{backgroundState.voiceDiagnostics.vadState}</dd></div>
-                  <div><dt>SilÃªncio</dt><dd>{backgroundState.voiceDiagnostics.silenceDurationMs} ms</dd></div>
+                  <div><dt>Silêncio</dt><dd>{backgroundState.voiceDiagnostics.silenceDurationMs} ms</dd></div>
                 </dl>
               )}
               <label>
-                <span>Atualizacoes</span>
+                <span>Atualizações</span>
                 <select value={updateChannel} onChange={(event) => setUpdateChannel(event.target.value as 'stable' | 'beta' | 'dev')}>
-                  <option value="stable">Estavel</option><option value="beta">Beta</option><option value="dev">Desenvolvimento</option>
+                  <option value="stable">Estável</option><option value="beta">Beta</option><option value="dev">Desenvolvimento</option>
                 </select>
               </label>
               <label className="setup-toggle"><input type="checkbox" checked={autostart} onChange={(event) => setAutostartChoice(event.target.checked)} /><span>Iniciar com o sistema</span></label>
@@ -714,7 +714,7 @@ export function VoiceAssistant() {
           <section className="permission-dialog voice-lab-dialog" role="dialog" aria-modal="true" aria-labelledby="voice-lab-title">
             <header className="permission-header">
               <span className="permission-icon" aria-hidden="true"><AudioLines /></span>
-              <div><p className="panel-kicker">DiagnÃ³stico local</p><h2 id="voice-lab-title">Doktor Voice Lab</h2></div>
+              <div><p className="panel-kicker">Diagnóstico local</p><h2 id="voice-lab-title">Doktor Voice Lab</h2></div>
               <button className="icon-button" type="button" onClick={() => setIsVoiceLabOpen(false)} aria-label="Fechar" title="Fechar"><X /></button>
             </header>
             <div className="permission-content voice-lab-content">
@@ -732,7 +732,7 @@ export function VoiceAssistant() {
                 <div><dt>Wake score</dt><dd>{diagnostics.wakeScore === null ? 'N/D' : diagnostics.wakeScore.toFixed(2)}</dd></div>
                 <div><dt>Threshold</dt><dd>{diagnostics.wakeThreshold === null ? 'N/D' : diagnostics.wakeThreshold.toFixed(2)}</dd></div>
                 <div><dt>Estado</dt><dd>{diagnostics.vadState}</dd></div>
-                <div><dt>SilÃªncio</dt><dd>{diagnostics.silenceDurationMs} ms</dd></div>
+                <div><dt>Silêncio</dt><dd>{diagnostics.silenceDurationMs} ms</dd></div>
                 <div><dt>Buffer</dt><dd>{diagnostics.bufferDurationMs} ms</dd></div>
                 <div><dt>Ganho</dt><dd>{diagnostics.gain.toFixed(1)}x</dd></div>
               </dl>

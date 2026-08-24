@@ -1,0 +1,9 @@
+# Normaliza fim de linha e trata os fontes como texto UTF-8.
+# O projeto ja teve texto de interface corrompido por gravacao em Latin-1.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.onnx binary
+*.svg text
