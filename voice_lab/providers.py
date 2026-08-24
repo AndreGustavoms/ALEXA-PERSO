@@ -24,12 +24,14 @@ class FasterWhisperSTTProvider:
         *,
         device: str = "cpu",
         compute_type: str = "int8",
+        beam_size: int = 5,
     ) -> None:
         from faster_whisper import WhisperModel
 
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
+        self.beam_size = beam_size
         self._model = WhisperModel(
             model_size,
             device=device,
@@ -47,7 +49,7 @@ class FasterWhisperSTTProvider:
         segments, info = self._model.transcribe(
             str(path),
             language="pt",
-            beam_size=5,
+            beam_size=self.beam_size,
             vad_filter=False,
             condition_on_previous_text=True,
             initial_prompt=(

@@ -82,6 +82,14 @@ def word_error_rate(expected: str, actual: str) -> float | None:
     return edit_distance(reference, normalize_words(actual)) / len(reference)
 
 
+def character_error_rate(expected: str, actual: str) -> float | None:
+    reference = list(" ".join(normalize_words(expected)))
+    if not reference:
+        return None
+    hypothesis = list(" ".join(normalize_words(actual)))
+    return edit_distance(reference, hypothesis) / len(reference)
+
+
 def classify_speech_cut(expected: str, actual: str) -> str:
     reference = normalize_words(expected)
     hypothesis = normalize_words(actual)
@@ -102,21 +110,22 @@ def classify_speech_cut(expected: str, actual: str) -> str:
     return "OTHER_ERROR"
 
 
-def intent_result(text: str) -> dict[str, Any] | None:
+def intent_result(
+    text: str,
+    context_name: str = "none",
+    previous_target: str = "",
+) -> dict[str, Any] | None:
     from assistant_runtime.assistant_commands.models import WindowContext
     from assistant_runtime.assistant_commands.parser import IntentParser
     from assistant_runtime.assistant_commands.router import CommandRouter
+    from assistant_runtime.intent_benchmark import context_for, resolved_entity
 
-    intents = CommandRouter(IntentParser()).parse(text, WindowContext())
+    context = context_for(context_name) if context_name != "none" else WindowContext()
+    intents = CommandRouter(IntentParser()).parse(text, context, previous_target)
     if not intents:
         return None
     intent = intents[0]
-    target = (
-        intent.parameters.get("target")
-        or intent.parameters.get("application")
-        or intent.parameters.get("query")
-        or ""
-    )
+    target = resolved_entity(intent.parameters)
     return {
         "command_id": intent.spec.id,
         "kind": intent.kind.value,
@@ -124,6 +133,55 @@ def intent_result(text: str) -> dict[str, Any] | None:
         "parameters": intent.parameters,
         "confidence": intent.confidence,
     }
+
+
+def compare_intent(
+    actual: dict[str, Any] | None,
+    expected: dict[str, Any] | None,
+) -> bool | None:
+    if expected is None:
+        return None
+    if expected.get("kind") == "NONE":
+        return actual is None
+    if actual is None:
+        return False
+    return all(
+        str(actual.get(key, "")).casefold() == str(value).casefold()
+        for key, value in expected.items()
+        if key in {"command_id", "kind", "target"}
+    )
+
+
+def compare_intent_kind(
+    actual: dict[str, Any] | None,
+    expected: dict[str, Any] | None,
+) -> bool | None:
+    if expected is None:
+        return None
+    if expected.get("kind") == "NONE":
+        return actual is None
+    if actual is None:
+        return False
+    keys = [key for key in ("command_id", "kind") if key in expected]
+    if not keys:
+        return None
+    return all(
+        str(actual.get(key, "")).casefold() == str(expected[key]).casefold()
+        for key in keys
+    )
+
+
+def compare_entity(
+    actual: dict[str, Any] | None,
+    expected: dict[str, Any] | None,
+) -> bool | None:
+    if expected is not None and expected.get("kind") == "NONE":
+        return None
+    if expected is None or "target" not in expected:
+        return None
+    if actual is None:
+        return False
+    return str(actual.get("target", "")).casefold() == str(expected["target"]).casefold()
 
 
 def transcribe_vosk(model: Any, pcm16: bytes, sample_rate: int) -> tuple[str, float]:
@@ -135,6 +193,26 @@ def transcribe_vosk(model: Any, pcm16: bytes, sample_rate: int) -> tuple[str, fl
         session.send_audio(frame)
     text = session.local_result()
     return text, (time.perf_counter() - started) * 1_000
+
+
+def preprocess_audio(
+    pcm16: bytes,
+    config: Any,
+) -> tuple[bytes, dict[str, float]]:
+    from assistant_runtime.voice_activity import AudioPreprocessor
+
+    preprocessor = AudioPreprocessor(config.maximum_input_gain)
+    processed_frames = []
+    clipping = 0.0
+    for frame in iter_frames(pcm16, config.frame_bytes):
+        processed, metrics = preprocessor.process(frame)
+        processed_frames.append(processed)
+        clipping += metrics.clipping
+    return b"".join(processed_frames), {
+        "noise_floor_final": round(preprocessor.noise_floor, 6),
+        "gain_final": round(preprocessor.gain, 3),
+        "clipping_mean": round(clipping / max(1, len(processed_frames)), 8),
+    }
 
 
 def _boundary_risk(pcm16: bytes, sample_rate: int) -> dict[str, Any]:

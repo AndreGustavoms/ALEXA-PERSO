@@ -1,6 +1,14 @@
 {
-  "decision": "retain-production-baseline",
-  "reason": "No labeled sample demonstrated a supervised improvement over production.",
+  "decision": "retain-lightweight-vosk-and-production-voice-config",
+  "reason": "Production preprocessing reached 100% on volume variants; Whisper small tied clean end-to-end accuracy with materially higher latency and size.",
+  "evidence": {
+    "wake_recall": 1.0,
+    "wake_false_accept_rate": 0.0,
+    "clean_end_to_end_accuracy": 0.8889,
+    "volume_variant_end_to_end_accuracy": 1.0,
+    "robustness_end_to_end_accuracy": 0.85,
+    "mean_stt_latency_ms": 1414.54
+  },
   "voiceConfig": {
     "speech_end_silence": 1.5,
     "possible_end_silence": 0.3,

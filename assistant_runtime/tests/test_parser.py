@@ -143,12 +143,28 @@ class IntentParserTests(unittest.TestCase):
         self.assertEqual(volume.parameters["value"], 50)  # type: ignore[union-attr]
 
     def test_recovers_valorant_from_common_vosk_transcription(self) -> None:
-        for phrase in ("abre o valor antes", "abrir valor ante", "inicia valora antes"):
+        for phrase in (
+            "abre o valor antes",
+            "abrir valor ante",
+            "inicia valora antes",
+            "abre o valorante",
+            "abre o valor",
+        ):
             with self.subTest(phrase=phrase):
                 intent = self.parser.parse(phrase, self.application)
                 self.assertIsNotNone(intent)
                 self.assertEqual(intent.spec.id, "application.open")  # type: ignore[union-attr]
                 self.assertEqual(intent.parameters["application"], "valorant")  # type: ignore[union-attr]
+
+    def test_ignores_terminal_punctuation_in_application_name(self) -> None:
+        intent = self.parser.parse("abre o console.", self.application)
+        self.assertIsNotNone(intent)
+        self.assertEqual(intent.parameters["application"], "console")  # type: ignore[union-attr]
+
+    def test_ignores_terminal_stt_punctuation_for_registered_commands(self) -> None:
+        intent = self.parser.parse("desliga o computador...")
+        self.assertIsNotNone(intent)
+        self.assertEqual(intent.spec.id, "system.shutdown")  # type: ignore[union-attr]
 
     def test_natural_close_phrases_converge_on_browser_tab(self) -> None:
         phrases = (

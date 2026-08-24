@@ -10,6 +10,8 @@ import vosk
 
 from assistant_runtime.app_paths import PATHS
 from assistant_runtime.main import WAKE_VARIANTS
+from assistant_runtime.voice_activity import AudioPreprocessor, VoiceActivityConfig
+from assistant_runtime.voice_activity import create_speech_detector
 from assistant_runtime.wake_word import VoskWakeWordEngine, WakeWordConfig
 from voice_lab.core import iter_frames, load_jsonl, read_wav
 
@@ -20,14 +22,30 @@ ROOT = Path(__file__).resolve().parent
 def evaluate_vosk(model: vosk.Model, record: dict[str, Any]) -> dict[str, Any]:
     audio = read_wav(ROOT / str(record["audio"]))
     grammar = json.dumps([*WAKE_VARIANTS, "[unk]"], ensure_ascii=False)
+    wake_config = WakeWordConfig.from_file(
+        Path("assistant_runtime/wake_word_config.json")
+    )
     engine = VoskWakeWordEngine(
-        vosk.KaldiRecognizer(model, audio.sample_rate, grammar), WAKE_VARIANTS
+        vosk.KaldiRecognizer(model, audio.sample_rate, grammar),
+        WAKE_VARIANTS,
+        consecutive_frames=wake_config.consecutive_frames,
     )
     detections = 0
     first_detection_ms = None
     frame_bytes = audio.sample_rate * 2 * 30 // 1_000
+    voice_config = VoiceActivityConfig.from_file(
+        Path("assistant_runtime/voice_config.json")
+    )
+    preprocessor = AudioPreprocessor(voice_config.maximum_input_gain)
+    vad = create_speech_detector(voice_config)
     for index, frame in enumerate(iter_frames(audio.pcm16, frame_bytes), start=1):
-        if engine.accept(frame, audio.sample_rate).detected:
+        processed, _metrics = preprocessor.process(frame)
+        speech_active = vad.is_speech(processed, audio.sample_rate)
+        if engine.accept(
+            processed,
+            audio.sample_rate,
+            speech_active=speech_active,
+        ).detected:
             detections += 1
             if first_detection_ms is None:
                 first_detection_ms = index * 30

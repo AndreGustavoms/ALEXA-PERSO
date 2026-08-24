@@ -19,6 +19,16 @@ parcial/final e latencia. O caminho de execucao de acoes nao e importado.
 .\.venv\Scripts\python.exe -m voice_lab.record_samples --condition NORMAL_VOICE
 ```
 
+## Preparar gravacoes autorizadas
+
+```powershell
+.\.venv\Scripts\python.exe -m voice_lab.prepare_existing_dataset
+.\.venv\Scripts\python.exe -m voice_lab.augment_dataset
+```
+
+Os recortes, hashes, manifests locais e versoes com volume/ruido permanecem
+privados. Rotulos inferidos por consenso de STT ficam marcados para auditoria.
+
 ## Executar baseline e experimentos
 
 ```powershell

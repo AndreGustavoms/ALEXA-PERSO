@@ -55,7 +55,7 @@ def normalize_text(value: str) -> str:
 
 def normalize_natural_command(value: str) -> str:
     """Remove conversational framing while preserving intent parameters."""
-    text = normalize_text(value).removesuffix("?").strip()
+    text = normalize_text(value).rstrip(".,!?;:").strip()
     previous = ""
     while text != previous:
         previous = text

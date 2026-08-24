@@ -64,6 +64,7 @@ CLOSE_WORDS = r"(?:fecha|feche|fechar|encerra|encerre|encerrar)"
 SEARCH_WORDS = r"(?:pesquisa|pesquise|pesquisar|procura|procure|procurar|busca|busque|buscar)"
 
 APPLICATION_SPEECH_ALIASES = {
+    "valor": "valorant",
     "valor antes": "valorant",
     "valor ante": "valorant",
     "valora antes": "valorant",
@@ -91,7 +92,7 @@ KNOWN_APPLICATIONS = {
 
 
 def normalize_application_name(value: str) -> str:
-    name = value.strip()
+    name = value.strip().strip(".,!?;:")
     name = APPLICATION_SPEECH_ALIASES.get(name, name)
     return fuzzy_entity(name, KNOWN_APPLICATIONS)
 

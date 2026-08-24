@@ -48,7 +48,13 @@ class WakeWordEngine(Protocol):
     name: str
     score: float | None
 
-    def accept(self, pcm16: bytes, sample_rate: int) -> WakeWordResult: ...
+    def accept(
+        self,
+        pcm16: bytes,
+        sample_rate: int,
+        *,
+        speech_active: bool | None = None,
+    ) -> WakeWordResult: ...
 
 
 def _normalize(value: str) -> str:
@@ -61,11 +67,23 @@ def _normalize(value: str) -> str:
 
 
 class VoskWakeWordEngine:
-    def __init__(self, recognizer: Any, variants: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        recognizer: Any,
+        variants: tuple[str, ...],
+        consecutive_frames: int = 1,
+        maximum_candidate_seconds: float = 3.0,
+    ) -> None:
         self.recognizer = recognizer
         self.variants = tuple(_normalize(item) for item in variants)
+        self.consecutive_frames = consecutive_frames
+        self.maximum_candidate_seconds = maximum_candidate_seconds
         self.name = "vosk-fallback"
         self.score: float | None = None
+        self._hits = 0
+        self._utterance_seconds = 0.0
+        self._speech_seconds = 0.0
+        self._silence_seconds = 0.0
 
     @staticmethod
     def _field(payload: str, key: str) -> str:
@@ -74,15 +92,49 @@ class VoskWakeWordEngine:
         except (TypeError, ValueError, json.JSONDecodeError):
             return ""
 
-    def accept(self, pcm16: bytes, sample_rate: int) -> WakeWordResult:
-        del sample_rate
+    def accept(
+        self,
+        pcm16: bytes,
+        sample_rate: int,
+        *,
+        speech_active: bool | None = None,
+    ) -> WakeWordResult:
+        frame_seconds = len(pcm16) / (sample_rate * 2)
+        self._utterance_seconds += len(pcm16) / (sample_rate * 2)
+        if speech_active is True:
+            self._speech_seconds += frame_seconds
+            self._silence_seconds = 0.0
+        elif speech_active is False:
+            self._silence_seconds += frame_seconds
+            if self._silence_seconds >= 0.3:
+                self._speech_seconds = 0.0
         accepted = self.recognizer.AcceptWaveform(pcm16)
         text = self._field(
             self.recognizer.Result() if accepted else self.recognizer.PartialResult(),
             "text" if accepted else "partial",
         )
         normalized = _normalize(text)
-        detected = any(variant in normalized for variant in self.variants)
+        matched = any(variant in normalized for variant in self.variants)
+        if accepted:
+            detected = matched and (
+                speech_active is None
+                or self._speech_seconds <= self.maximum_candidate_seconds
+            )
+            self._hits = 0
+            self._utterance_seconds = 0.0
+        elif (
+            matched
+            and self._utterance_seconds <= self.maximum_candidate_seconds
+            and (
+                speech_active is None
+                or self._speech_seconds <= self.maximum_candidate_seconds
+            )
+        ):
+            self._hits += 1
+            detected = self._hits >= self.consecutive_frames
+        else:
+            self._hits = 0
+            detected = False
         return WakeWordResult(detected, None, self.name)
 
 
@@ -112,7 +164,14 @@ class OpenWakeWordEngine:
             embedding_model_path=str(feature_directory / "embedding_model.onnx"),
         )
 
-    def accept(self, pcm16: bytes, sample_rate: int) -> WakeWordResult:
+    def accept(
+        self,
+        pcm16: bytes,
+        sample_rate: int,
+        *,
+        speech_active: bool | None = None,
+    ) -> WakeWordResult:
+        del speech_active
         if sample_rate < 16_000 or sample_rate % 16_000:
             raise ValueError(f"openWakeWord nao suporta {sample_rate} Hz.")
         step = sample_rate // 16_000
@@ -156,4 +215,8 @@ def create_wake_word_engine(
         except (ImportError, OSError, RuntimeError, ValueError):
             if config.engine == "openwakeword":
                 raise
-    return VoskWakeWordEngine(recognizer, variants)
+    return VoskWakeWordEngine(
+        recognizer,
+        variants,
+        consecutive_frames=config.consecutive_frames,
+    )

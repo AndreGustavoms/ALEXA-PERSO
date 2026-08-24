@@ -37,6 +37,27 @@ class WakeWordTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             WakeWordConfig(threshold=0.99)
 
+    def test_vosk_fallback_rejects_one_frame_false_match(self) -> None:
+        engine = VoskWakeWordEngine(
+            FakeRecognizer(["ola doutor", ""]),
+            ("ola doutor",),
+            consecutive_frames=2,
+        )
+        self.assertFalse(engine.accept(b"frame", 16_000).detected)
+        self.assertFalse(engine.accept(b"frame", 16_000).detected)
+
+    def test_vosk_fallback_rejects_match_late_in_long_speech(self) -> None:
+        engine = VoskWakeWordEngine(
+            FakeRecognizer(["", "ola doutor", "ola doutor"]),
+            ("ola doutor",),
+            consecutive_frames=2,
+            maximum_candidate_seconds=0.1,
+        )
+        frame = b"\0" * 3_200
+        self.assertFalse(engine.accept(frame, 16_000).detected)
+        self.assertFalse(engine.accept(frame, 16_000).detected)
+        self.assertFalse(engine.accept(frame, 16_000).detected)
+
 
 if __name__ == "__main__":
     unittest.main()

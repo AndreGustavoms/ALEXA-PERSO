@@ -1023,8 +1023,12 @@ class AssistantRuntime:
 
                 if stt_session is None:
                     pre_roll.append(data)
-                    wake_vad.is_speech(data, sample_rate)
-                    wake_result = wake_engine.accept(data, sample_rate)
+                    wake_speech_active = wake_vad.is_speech(data, sample_rate)
+                    wake_result = wake_engine.accept(
+                        data,
+                        sample_rate,
+                        speech_active=wake_speech_active,
+                    )
                     self.update_voice_diagnostics(
                         vadEngine=str(getattr(wake_vad, "name", "custom")),
                         vadProbability=round(

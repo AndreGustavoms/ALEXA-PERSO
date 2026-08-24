@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import unittest
 
-from voice_lab.benchmark import aggregate, compare_entity, compare_intent, compare_intent_kind
-from voice_lab.core import classify_speech_cut, word_error_rate
+from voice_lab.benchmark import aggregate
+from voice_lab.core import (
+    character_error_rate,
+    classify_speech_cut,
+    compare_entity,
+    compare_intent,
+    compare_intent_kind,
+    word_error_rate,
+)
 from voice_lab.scoring import score_configuration
 
 
 class VoiceLabMetricTests(unittest.TestCase):
     def test_word_error_rate(self) -> None:
         self.assertEqual(word_error_rate("fecha o youtube", "fecha youtube"), 1 / 3)
+        self.assertGreater(character_error_rate("fecha", "feixa"), 0.0)
 
     def test_cut_classification(self) -> None:
         self.assertEqual(classify_speech_cut("fecha o youtube", "o youtube"), "START_CUT")
@@ -54,6 +62,8 @@ class VoiceLabMetricTests(unittest.TestCase):
             "low_normal_voice_recall": 1.0,
             "speech_cut_rate": 0.0,
             "wake_recall": 1.0,
+            "intent_accuracy": 1.0,
+            "entity_accuracy": 1.0,
             "false_wake_rate": 0.0,
             "latency_score": 1.0,
             "clipping": 0.0,

@@ -4,10 +4,12 @@ from typing import Any
 
 
 WEIGHTS = {
-    "end_to_end_accuracy": 0.35,
-    "low_normal_voice_recall": 0.25,
-    "speech_cut_rate": 0.20,
+    "end_to_end_accuracy": 0.30,
+    "low_normal_voice_recall": 0.20,
+    "speech_cut_rate": 0.15,
     "wake_recall": 0.10,
+    "intent_accuracy": 0.10,
+    "entity_accuracy": 0.05,
     "false_wake_rate": 0.05,
     "latency_score": 0.05,
 }
