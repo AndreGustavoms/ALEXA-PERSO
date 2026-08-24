@@ -71,6 +71,22 @@ class IntentParserTests(unittest.TestCase):
         self.assertEqual(typed.spec.id, "keyboard.type_text")  # type: ignore[union-attr]
         self.assertEqual(typed.parameters["text"], "meu nome aqui")  # type: ignore[union-attr]
 
+    def test_understands_search_field_instructions(self) -> None:
+        phrases = (
+            "na pesquisa do youtube digita futebol",
+            "na busca do YouTube escreva futebol",
+            "no youtube pesquisa futebol",
+            "pesquisa do youtube digite futebol",
+            "abre a pesquisa do youtube e digita futebol",
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                intent = self.parser.parse(phrase, self.browser)
+                self.assertIsNotNone(intent)
+                self.assertEqual(intent.spec.id, "browser.search")  # type: ignore[union-attr]
+                self.assertEqual(intent.parameters["destination"], "youtube")  # type: ignore[union-attr]
+                self.assertEqual(intent.parameters["query"], "futebol")  # type: ignore[union-attr]
+
     def test_accepts_doktor_wake_prefixes(self) -> None:
         self.assert_intent("Olá, Doktor, abra o YouTube", "browser.open_site")
         self.assert_intent("Olá, doutor, abra o YouTube", "browser.open_site")

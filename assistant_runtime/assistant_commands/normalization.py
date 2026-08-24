@@ -92,6 +92,12 @@ def normalize_natural_command(value: str) -> str:
     )
     for pattern, replacement in replacements:
         text = re.sub(pattern, replacement, text)
+    text = re.sub(
+        r"^abre (?:a )?((?:pesquisa|busca) (?:do|no) (?:youtube|google)) "
+        r"e ((?:digita|digite|escreve|escreva|pesquisa|pesquise|busca|busque) .+)$",
+        r"\1 \2",
+        text,
+    )
     return text.strip()
 
 

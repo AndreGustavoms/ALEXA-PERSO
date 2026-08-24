@@ -202,6 +202,35 @@ class IntentParser:
         context: WindowContext | None,
         previous_target: str = "",
     ) -> ParsedIntent | None:
+        destination_search_patterns = (
+            re.fullmatch(
+                r"(?:(?:na|no|a|o) )?(?:pesquisa|busca) "
+                r"(?:do|da|no|na) (youtube|google) (?:e )?"
+                r"(?:digita|digite|escreve|escreva|pesquisa|pesquise|busca|busque) (.+)",
+                text,
+            ),
+            re.fullmatch(
+                r"(?:no|na) (youtube|google) "
+                r"(?:digita|digite|escreve|escreva|pesquisa|pesquise|procura|procure|busca|busque) (.+)",
+                text,
+            ),
+        )
+        destination_search = next(
+            (match for match in destination_search_patterns if match),
+            None,
+        )
+        if destination_search:
+            destination = destination_search.group(1)
+            query = destination_search.group(2).strip()
+            return self._dynamic(
+                "browser.search",
+                f"Pesquisar no {destination.title()}",
+                "Navegador",
+                "web_search",
+                {"query": query, "destination": destination},
+                "Pesquisando {query}.",
+            )
+
         type_text = re.fullmatch(
             r"(?:escreve|escreva|escrever|digita|digite|digitar)"
             r"(?: pra mim| para mim)?(?: aqui)?(?: o texto)? (.+)",

@@ -110,3 +110,15 @@
 {"text":"por que o youtube fechou","context":"browser_youtube","intent":"NONE"}
 {"text":"sera que devo abrir o spotify","context":"application_code","intent":"NONE"}
 {"text":"eu gosto do youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"na pesquisa do youtube digita futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"na busca do youtube escreve futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"no youtube pesquisa futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"no youtube procura futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"pesquisa do youtube digite futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"busca no youtube escreva futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"abre a pesquisa do youtube e digita futebol","context":"browser_youtube","intent":"SEARCH_YOUTUBE","target":"youtube"}
+{"text":"na pesquisa do google digita restaurante perto","context":"browser_github","intent":"SEARCH_WEB","target":"google"}
+{"text":"no google pesquisa previsao do tempo","context":"browser_github","intent":"SEARCH_WEB","target":"google"}
+{"text":"na busca do google escreva noticias","context":"browser_github","intent":"SEARCH_WEB","target":"google"}
+{"text":"eu digitei futebol no youtube","context":"browser_youtube","intent":"NONE"}
+{"text":"como digita futebol na pesquisa do youtube","context":"browser_youtube","intent":"NONE"}

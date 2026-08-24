@@ -70,6 +70,21 @@ class CommandExecutorTests(unittest.TestCase):
             ["https://www.youtube.com/results?search_query=musica+brasileira"],
         )
 
+    def test_searches_from_natural_youtube_field_instruction(self) -> None:
+        result = self.executor.execute(
+            "na pesquisa do youtube digita futebol",
+            authorized=True,
+        )
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.action, "browser.search")
+        self.assertEqual(result.parameters["query"], "futebol")
+        self.assertEqual(result.parameters["destination"], "youtube")
+        self.assertEqual(
+            self.resources,
+            ["https://www.youtube.com/results?search_query=futebol"],
+        )
+
     def test_sensitive_action_requires_confirmation(self) -> None:
         pending = self.executor.execute("desligar o computador", authorized=True)
 
