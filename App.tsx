@@ -8,6 +8,7 @@ export function App() {
           <img className="brand-mark" src="/doktor-mark.svg" alt="" />
           <span className="brand-copy">
             <strong>Doktor Assistant</strong>
+            <small>Voice system</small>
           </span>
         </a>
 

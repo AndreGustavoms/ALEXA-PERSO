@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/doktor-mark.svg" width="88" alt="Doktor" />
+</p>
+
 # Doktor Assistant
 
 Assistente local do ecossistema Doktor. Permanece em segundo plano, reconhece uma frase de
@@ -41,7 +45,7 @@ GitHub CLI autenticado para permitir atualizacoes sem Git.
 
 1. Diga `Ola, Doktor`.
 2. Aguarde o sinal sonoro e `Sim, pode falar`.
-3. Comece a falar em ate sete segundos.
+3. Comece a falar em ate dez segundos.
 4. Depois que a fala comeca, nao existe limite de duracao.
 5. Com OpenAI ativa, o Semantic VAD decide quando a frase terminou. No modo
    local, cerca de um segundo de silencio continuo encerra o comando.

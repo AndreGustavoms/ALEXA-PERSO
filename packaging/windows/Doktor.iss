@@ -24,6 +24,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputRoot}
 OutputBaseFilename=Doktor-{#AppVersion}-win-{#AppArch}
 SetupIconFile={#SourceRoot}\assets\doktor-assistant.ico
+WizardImageFile={#SourceRoot}\assets\doktor-installer-wizard.png
+WizardSmallImageFile={#SourceRoot}\assets\doktor-installer-small.png
 UninstallDisplayIcon={app}\Doktor.exe
 Compression=lzma2/max
 SolidCompression=yes
@@ -33,6 +35,10 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=yes
 VersionInfoVersion={#AppVersion}
+VersionInfoCompany=Doktor
+VersionInfoDescription=Doktor Assistant - assistente de voz local
+VersionInfoProductName=Doktor Assistant
+VersionInfoProductVersion={#AppVersion}
 
 [Tasks]
 Name: "autostart"; Description: "Iniciar Doktor junto com o Windows"; Flags: unchecked

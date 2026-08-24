@@ -89,6 +89,14 @@ a:focus-visible {
   font-weight: 700;
 }
 
+.brand-copy small {
+  color: var(--muted);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
 .version-label {
   display: inline-flex;
   align-items: center;

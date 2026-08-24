@@ -32,6 +32,7 @@ def main() -> int:
     parser.add_argument("--skip-model", action="store_true")
     args = parser.parse_args()
     version = validate_version()
+    run(sys.executable, "assistant_runtime/create_icon.py")
     if not args.skip_web:
         run("npm", "ci")
         run("npm", "run", "build")

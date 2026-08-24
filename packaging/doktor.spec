@@ -9,10 +9,38 @@ from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(os.environ.get("DOKTOR_PROJECT_ROOT", Path.cwd())).resolve()
 MODEL = ROOT / "runtime/models/vosk-model-small-pt-0.3"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+VERSION_PARTS = tuple(int(part) for part in VERSION.split("-")[0].split(".")) + (0,)
+VERSION_TUPLE = VERSION_PARTS[:4]
+VERSION_INFO = ROOT / "build/pyinstaller-work/doktor-version-info.txt"
 if not (ROOT / "dist/index.html").exists():
     raise SystemExit("Frontend ausente. Execute npm run build antes do PyInstaller.")
 if not MODEL.exists():
     raise SystemExit("Modelo Vosk ausente. Execute assistant_runtime/setup_model.py.")
+
+if sys.platform == "win32":
+    VERSION_INFO.parent.mkdir(parents=True, exist_ok=True)
+    VERSION_INFO.write_text(
+        f"""VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={VERSION_TUPLE}, prodvers={VERSION_TUPLE}, mask=0x3f,
+    flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'Doktor'),
+      StringStruct('FileDescription', 'Doktor Assistant - assistente de voz local'),
+      StringStruct('FileVersion', '{VERSION}'),
+      StringStruct('InternalName', 'Doktor'),
+      StringStruct('LegalCopyright', 'Copyright (c) 2026 AndreGustavoms'),
+      StringStruct('OriginalFilename', 'Doktor.exe'),
+      StringStruct('ProductName', 'Doktor Assistant'),
+      StringStruct('ProductVersion', '{VERSION}')
+    ])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ])
+""",
+        encoding="utf-8",
+    )
 
 datas = [
     (str(ROOT / "VERSION"), "."),
@@ -63,6 +91,7 @@ exe = EXE(
     upx=False,
     console=False,
     icon=str(ROOT / "assets/doktor-assistant.ico") if sys.platform == "win32" else None,
+    version=str(VERSION_INFO) if sys.platform == "win32" else None,
 )
 coll = COLLECT(
     exe,
