@@ -236,4 +236,5 @@ acontecem localmente; internet é usada por updates e por recursos web/OpenAI.
 
 Documentação técnica: `docs/ARCHITECTURE.md`, `docs/BUILD.md`,
 `docs/RELEASE.md`, `docs/PLATFORM_ADAPTERS.md`, `docs/VOICE_ENGINE.md` e
-`docs/TROUBLESHOOTING.md`.
+`docs/TROUBLESHOOTING.md`. Resultados e procedimentos do teste de voz ficam em
+`docs/VOICE_BENCHMARK.md` e `voice_lab/reports/overnight-report.md`.
