@@ -740,6 +740,19 @@ export function VoiceAssistant() {
                 <span>Wake</span><strong>{diagnostics.wakeEngine}</strong>
                 <span>VAD</span><strong>{diagnostics.vadEngine}</strong>
               </div>
+              {backgroundState?.commandDebug && (
+                <dl className="command-debug">
+                  <div><dt>Ouvido</dt><dd>{backgroundState.commandDebug.heard}</dd></div>
+                  <div><dt>Normalizado</dt><dd>{backgroundState.commandDebug.normalized}</dd></div>
+                  <div><dt>Intenção</dt><dd>{backgroundState.commandDebug.intent}</dd></div>
+                  <div><dt>Entidade</dt><dd>{backgroundState.commandDebug.entity || 'N/D'}</dd></div>
+                  <div><dt>Confiança</dt><dd>{Math.round(backgroundState.commandDebug.confidence * 100)}%</dd></div>
+                  <div><dt>Origem</dt><dd>{backgroundState.commandDebug.source}</dd></div>
+                  <div><dt>Alvo</dt><dd>{backgroundState.commandDebug.resolvedTarget || 'N/D'}</dd></div>
+                  <div><dt>Rota</dt><dd>{backgroundState.commandDebug.route || 'N/D'}</dd></div>
+                  <div><dt>Execução</dt><dd>{backgroundState.commandDebug.execution}</dd></div>
+                </dl>
+              )}
             </div>
           </section>
         </div>

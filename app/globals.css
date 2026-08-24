@@ -992,6 +992,36 @@ a:focus-visible {
   align-items: center;
 }
 
+.command-debug {
+  display: grid;
+  gap: 0;
+  margin: 4px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.command-debug div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.command-debug dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.command-debug dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .voice-lab-engines span {
   color: var(--muted);
   font-size: 10px;

@@ -5,8 +5,14 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .entities import EntityResolver
 from .models import CommandSpec, ParsedIntent, WindowContext
-from .normalization import extract_percent, normalize_natural_command, normalize_text
+from .normalization import (
+    extract_percent,
+    is_actionable_command,
+    normalize_natural_command,
+    normalize_text,
+)
 from .registry import COMMANDS, command
 
 WEBSITES = {
@@ -118,6 +124,7 @@ def fuzzy_entity(
 class IntentParser:
     def __init__(self, commands: tuple[CommandSpec, ...] = COMMANDS) -> None:
         self.commands = commands
+        self.entities = EntityResolver()
         self._compiled = tuple(
             (spec, tuple(re.compile(rf"^(?:{alias})$") for alias in spec.aliases))
             for spec in commands
@@ -129,6 +136,8 @@ class IntentParser:
         context: WindowContext | None = None,
         previous_target: str = "",
     ) -> ParsedIntent | None:
+        if not is_actionable_command(transcript):
+            return None
         text = normalize_natural_command(transcript)
         if not text:
             return None
@@ -359,30 +368,42 @@ class IntentParser:
                 risk="contextual",
             )
 
-        close_app = re.fullmatch(rf"{CLOSE_WORDS} (?:o |a )?(.+)", text)
+        close_app = re.fullmatch(
+            rf"{CLOSE_WORDS} (?:(?:o|a|esse|essa|este|esta) )?(.+)",
+            text,
+        )
+        close_entity = (
+            self.entities.resolve(
+                close_app.group(1).strip(),
+                allowed=set(WEBSITES) | set(KNOWN_APPLICATIONS.values()),
+            )
+            if close_app
+            else None
+        )
         if (
             close_app
-            and close_app.group(1).strip() in WEBSITES
+            and close_entity
+            and close_entity.value in WEBSITES
             and context
             and context.kind == "browser"
         ):
-            target = close_app.group(1).strip()
+            target = close_entity.value
             label = WEBSITES[target][0]
             return self._dynamic(
                 "browser.close_tab",
                 f"Fechar {label}",
                 "Navegador",
                 "shortcut",
-                {"keys": ("CTRL", "W"), "context": "browser"},
+                {"keys": ("CTRL", "W"), "context": "browser", "target": target, "target_type": "tab"},
                 f"Fechei o {label}.",
                 risk="contextual",
             )
         contextual_targets = {
-            "isso", "aqui", "essa pagina", "esta pagina", "pagina atual",
-            "essa aba", "esta aba", "aba atual", "essa janela", "esta janela",
-            "janela atual",
-            "esse programa", "esse aplicativo", "essa aplicacao", "esse negocio",
-            "esse processo", "processo atual",
+            "isso", "aqui", "pagina", "essa pagina", "esta pagina", "pagina atual",
+            "aba", "essa aba", "esta aba", "aba atual", "janela", "essa janela",
+            "esta janela", "janela atual", "programa", "aplicativo", "aplicacao",
+            "negocio", "processo", "esse programa", "esse aplicativo",
+            "essa aplicacao", "esse negocio", "esse processo", "processo atual",
         }
         if close_app and close_app.group(1).strip() in contextual_targets:
             reference = close_app.group(1).strip()
@@ -401,7 +422,11 @@ class IntentParser:
             return self._contextual_close(context, previous_target)
         if close_app and close_app.group(1) not in contextual_targets:
             raw_app = close_app.group(1).strip()
-            site_target = fuzzy_entity(raw_app, WEBSITES)
+            entity = self.entities.resolve(
+                raw_app,
+                allowed=set(WEBSITES) | set(KNOWN_APPLICATIONS.values()),
+            )
+            site_target = entity.value
             if site_target in WEBSITES and context and context.kind == "browser":
                 label = WEBSITES[site_target][0]
                 return self._dynamic(
@@ -413,7 +438,7 @@ class IntentParser:
                     f"Fechei o {label}.",
                     risk="contextual",
                 )
-            app = normalize_application_name(raw_app)
+            app = entity.value if entity.confidence else normalize_application_name(raw_app)
             if app in {"navegador", "browser"} and context and context.kind == "browser":
                 app = context.application or context.process_name.removesuffix(".exe")
             return self._dynamic("application.close", f"Fechar {app}", "Aplicativos", "close_application", {"application": app, "target_type": "application"}, f"Fechei {app}.", risk="contextual")

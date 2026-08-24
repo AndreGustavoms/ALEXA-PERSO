@@ -447,6 +447,9 @@ class WindowsActions:
         if required and context.kind != required:
             label = "navegador" if required == "browser" else "Explorador de Arquivos"
             raise RuntimeError(f"O {label} precisa estar em foco.")
+        target = normalize_text(str(intent.parameters.get("target", "")))
+        if target and target not in normalize_text(context.title):
+            raise FileNotFoundError(f"O alvo nao esta na aba ativa: {target}")
         self.shortcut_sender(tuple(intent.parameters["keys"]))
         return self._format_success(intent)
 

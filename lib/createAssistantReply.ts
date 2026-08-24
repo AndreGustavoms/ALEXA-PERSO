@@ -16,7 +16,7 @@ export function createAssistantReply(transcript: string) {
   }
 
   if (/\b(ajuda|o que voce faz|como funciona)\b/.test(normalizedTranscript)) {
-    return 'No modo local, posso executar comandos registrados. Abra o aplicativo em segundo plano para usar ações do Windows.';
+    return 'Posso abrir e fechar aplicativos, controlar janelas, pesquisar e ajustar o computador.';
   }
 
   if (/\b(obrigado|obrigada|valeu)\b/.test(normalizedTranscript)) {
@@ -25,5 +25,5 @@ export function createAssistantReply(transcript: string) {
 
   const safeTranscript = cleanTranscript.slice(0, MAX_TRANSCRIPT_LENGTH);
 
-  return `Ouvi: ${safeTranscript}. O executor de comandos locais não está conectado neste modo.`;
+  return `Ouvi: ${safeTranscript}. Não consegui identificar uma ação segura. Pode dizer de outra forma?`;
 }

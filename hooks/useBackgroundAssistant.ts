@@ -43,6 +43,9 @@ export interface AssistantAction {
     | 'cancelled'
     | 'expired'
     | 'error'
+    | 'failed'
+    | 'not_found'
+    | 'ambiguous'
     | 'blocked'
     | 'permission_required';
 }
@@ -54,6 +57,18 @@ export interface BackgroundAssistantState {
   enabled: boolean;
   error: string;
   lastAction: AssistantAction | null;
+  commandDebug?: {
+    heard: string;
+    normalized: string;
+    intent: string;
+    commandId: string;
+    entity: string;
+    confidence: number;
+    source: string;
+    route: string;
+    resolvedTarget: string;
+    execution: string;
+  } | null;
   mode: BackgroundAssistantMode;
   partial: string;
   permission: AssistantPermission;

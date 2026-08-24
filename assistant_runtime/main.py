@@ -209,7 +209,8 @@ class AssistantRuntime:
         self.settings_store = SettingsStore(PATHS.config / "settings.json")
         self.update_service = UpdateService(self.settings_store.value().update_channel)
         self.command_executor = CommandExecutor(
-            status_callback=lambda mode: self.update_state(mode=mode)
+            status_callback=lambda mode: self.update_state(mode=mode),
+            debug_callback=lambda trace: self.update_state(commandDebug=trace),
         )
         self.stop_event = threading.Event()
         self.listening_enabled = threading.Event()
@@ -229,6 +230,7 @@ class AssistantRuntime:
             "transcript": "",
             "wakePhrase": WAKE_PHRASE,
             "lastAction": None,
+            "commandDebug": None,
             "version": __version__,
             "platform": detect_platform().__dict__,
             "settings": self.settings_store.snapshot(),

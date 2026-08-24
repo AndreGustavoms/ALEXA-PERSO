@@ -4,7 +4,7 @@ import re
 import unicodedata
 
 WAKE_PREFIX = re.compile(
-    r"^(?:(?:ola)\s+)?(?:doktor|doutor)[,:]?\s+"
+    r"^(?:(?:po|ei)\s+)?(?:(?:ola)\s+)?(?:doktor|doutor)[,:]?\s+"
 )
 POLITE_SUFFIX = re.compile(
     r"\s+(?:por favor|para mim|pra mim|se puder|por gentileza)$"
@@ -29,7 +29,7 @@ ACTION_START = re.compile(
     r"reduz|reduzir|muta|desmuta|toca|tocar|pause|pausa|pausar|play|proxima|anterior)\b"
 )
 SOFTENERS = re.compile(
-    r"\b(?:por favor|pra mim|para mim|ai|rapidinho)\b"
+    r"\b(?:por favor|pra mim|para mim|ai|rapidinho|por gentileza)\b"
 )
 CONTEXT_REFERENCES = re.compile(
     r"\b(?:ele|ela|esse negocio|essa coisa|isso daqui|isso ai)\b"
@@ -93,6 +93,21 @@ def normalize_natural_command(value: str) -> str:
     for pattern, replacement in replacements:
         text = re.sub(pattern, replacement, text)
     return text.strip()
+
+
+NON_ACTIONABLE = (
+    re.compile(r"^nao\s+(?:fecha|feche|fechar|encerra|finaliza|tira)\b"),
+    re.compile(r"^(?:como|quando|por que|porque)\s+(?:fecha|fechar|encerra|finaliza|tira)\b"),
+    re.compile(r"\b(?:eu|voce|ele|ela)\s+(?:fechei|fechou|encerrou|finalizou)\b"),
+    re.compile(r"\b(?:deveria|devia|poderia ser melhor)\s+(?:fechar|encerrar|finalizar)\b"),
+    re.compile(r"^sera que\b"),
+)
+
+
+def is_actionable_command(value: str) -> bool:
+    """Reject negated, retrospective and informational close phrases."""
+    text = normalize_text(value).removesuffix("?").strip()
+    return not any(pattern.search(text) for pattern in NON_ACTIONABLE)
 
 
 def contains_term(text: str, term: str) -> bool:

@@ -23,7 +23,7 @@ class CommandExecutorTests(unittest.TestCase):
             handle=100,
             process_id=10,
             process_name="chrome.exe",
-            title="Exemplo - Google Chrome",
+            title="YouTube - Google Chrome",
             application="Chrome",
             kind="browser",
         )
@@ -103,6 +103,41 @@ class CommandExecutorTests(unittest.TestCase):
         self.assertTrue(result.executed)
         self.assertEqual(result.status, "completed")
         self.assertEqual(self.shortcuts, [("CTRL", "W")])
+
+    def test_named_site_does_not_close_an_unrelated_tab(self) -> None:
+        self.context = WindowContext(
+            handle=100,
+            process_id=10,
+            process_name="chrome.exe",
+            title="GitHub - Google Chrome",
+            application="Chrome",
+            kind="browser",
+        )
+
+        result = self.executor.execute("fecha o YouTube", authorized=True)
+
+        self.assertTrue(result.matched)
+        self.assertFalse(result.executed)
+        self.assertEqual(result.status, "not_found")
+        self.assertEqual(self.shortcuts, [])
+
+    def test_command_debug_exposes_every_pipeline_stage(self) -> None:
+        traces: list[dict[str, object]] = []
+        executor = CommandExecutor(
+            shortcut_sender=self.shortcuts.append,
+            context_provider=lambda: self.context,
+            shortcut_roots=(),
+            debug_callback=traces.append,
+        )
+
+        result = executor.execute("pode fechar o yutube pra mim", authorized=True)
+
+        self.assertTrue(result.executed)
+        self.assertEqual(traces[-1]["normalized"], "fecha o yutube")
+        self.assertEqual(traces[-1]["intent"], "CLOSE_APPLICATION")
+        self.assertEqual(traces[-1]["entity"], "youtube")
+        self.assertEqual(traces[-1]["execution"], "SUCCESS")
+        self.assertIn("shortcut", str(traces[-1]["route"]))
 
     def test_pending_action_can_be_cancelled(self) -> None:
         self.executor.execute("reinicia o computador", authorized=True)

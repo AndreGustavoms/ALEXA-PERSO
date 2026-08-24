@@ -30,5 +30,5 @@ def create_assistant_reply(transcript: str) -> str:
     safe_transcript = clean_transcript[:MAX_TRANSCRIPT_LENGTH]
     return (
         f"Ouvi: {safe_transcript}. "
-        "Ainda não tenho uma ação registrada para esse pedido."
+        "Não consegui identificar uma ação segura. Pode dizer de outra forma?"
     )

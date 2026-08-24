@@ -5,6 +5,7 @@ import re
 from .models import ParsedIntent, WindowContext
 from .normalization import normalize_natural_command
 from .parser import IntentParser
+from .semantic import SemanticIntentClassifier
 
 
 COMMAND_START = (
@@ -26,6 +27,7 @@ class CommandRouter:
 
     def __init__(self, parser: IntentParser) -> None:
         self.parser = parser
+        self.semantic = SemanticIntentClassifier(parser)
 
     def parse(
         self,
@@ -41,6 +43,8 @@ class CommandRouter:
         )
         if len(clauses) == 1:
             intent = self.parser.parse(text, context, previous_target)
+            if intent is None:
+                intent = self.semantic.classify(text, context, previous_target)
             return (intent,) if intent else ()
 
         intents: list[ParsedIntent] = []

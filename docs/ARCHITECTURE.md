@@ -6,7 +6,9 @@ faz parte do aplicativo instalado.
 
 ```text
 Microfone -> wake Vosk local -> VAD -> STT provider
-          -> IntentParser -> CommandRouter -> PlatformAdapter -> acao registrada
+          -> TextNormalizer -> IntentParser -> EntityResolver
+          -> ContextResolver -> SemanticFallback -> CommandRouter
+          -> PlatformAdapter -> resultado observado
           -> TTS -> wake
 ```
 
@@ -28,10 +30,16 @@ seguros convergem para formas canônicas; por exemplo, `encerra`, `finaliza` e
 `sai do` convergem para `fecha`. A mesma etapa atende abrir, janelas, mídia,
 volume e pesquisa.
 
-O parser resolve primeiro comandos deterministas registrados. Nomes conhecidos
-de sites e aplicativos aceitam correspondência aproximada somente acima de
-0.82 e rejeitam resultados ambíguos. Texto desconhecido continua sem executor
-e nunca vira comando de shell.
+O parser resolve primeiro comandos deterministas registrados. O
+`EntityResolver` converte aliases e erros comuns do STT, como `yutube`,
+`you tube`, `crome` e `spotfy`, mantendo correspondência aproximada acima de
+0.82 e rejeitando resultados ambíguos. Negação, passado e perguntas sobre como
+fazer algo são bloqueados antes do roteamento.
+
+Quando as camadas deterministas não resolvem uma frase, o fallback semântico
+local pode produzir somente `Intent + Entity + Confidence`. Ele não recebe
+permissão para executar shell e não transforma texto desconhecido em ação.
+As intenções públicas usam o enum central `CommandIntent`.
 
 Para pedidos contextuais de fechamento, a ordem é:
 
@@ -44,6 +52,14 @@ Fechar aba, janela ou aplicativo é uma ação contextual imediata. Confirmaçã
 reservada para ações destrutivas, como desligar ou reiniciar o computador. Uma
 nova frase executável substitui uma confirmação pendente; apenas respostas
 isoladas como `sim` e `não` resolvem essa confirmação.
+
+## Diagnóstico de intenções
+
+Cada comando registra transcrição bruta, texto normalizado, intenção central,
+entidade, confiança, origem da classificação, alvo resolvido, rota e resultado.
+Os resultados possíveis são `SUCCESS`, `NOT_FOUND`, `FAILED`, `AMBIGUOUS`,
+`BLOCKED` e `PENDING`. O painel fica no Doktor Voice Lab e os mesmos dados são
+gravados como `command_event` no log local.
 
 ## Sensibilidade do microfone
 

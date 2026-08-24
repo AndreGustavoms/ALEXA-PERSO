@@ -32,6 +32,7 @@ class CommandExecutor:
         text_sender: Callable[[str], None] | None = None,
         context_provider: Callable[[], WindowContext] | None = None,
         status_callback: Callable[[str], None] | None = None,
+        debug_callback: Callable[[dict[str, object]], None] | None = None,
         confirmation_timeout: float = 15.0,
     ) -> None:
         del assistant_window_closer  # Mantido para compatibilidade com a API anterior.
@@ -54,9 +55,12 @@ class CommandExecutor:
         provider = WindowContextProvider()
         self.context_provider = context_provider or provider.current
         self.status_callback = status_callback or (lambda _status: None)
+        self.debug_callback = debug_callback or (lambda _trace: None)
+        self._active_context = WindowContext()
 
     def execute(self, transcript: str, authorized: bool) -> CommandResult:
         context = self._safe_context()
+        self._active_context = context
         intents = self.router.parse(
             transcript,
             context,
@@ -101,13 +105,16 @@ class CommandExecutor:
             intents = (confirmation.intent,)
         if not intents:
             self._log(transcript, None, False, "not_matched")
+            self._emit_debug(transcript, None, "UNKNOWN")
             return CommandResult(False, False, "")
         if len(intents) > 1:
             return self._execute_batch(transcript, intents, context, authorized)
         intent = intents[0]
 
         if intent.spec.executor == "clarify":
-            return self._execute_intent(transcript, intent, context)
+            result = self._result(intent, False, intent.spec.success_message, "ambiguous")
+            self._record(transcript, intent, result)
+            return result
 
         if not authorized and intent.spec.category != "Informacao":
             response = "Reconheci o comando, mas a permissão para ações locais ainda não foi ativada."
@@ -229,12 +236,12 @@ class CommandExecutor:
             )
             result = self._result(intent, True, response, status)
         except FileNotFoundError:
-            logging.exception("Recurso nao encontrado para a intencao %s.", intent.spec.id)
+            logging.warning("Recurso nao encontrado para a intencao %s.", intent.spec.id)
             target = intent.parameters.get("application", "esse aplicativo")
-            result = self._result(intent, False, f"Nao encontrei {target}.", "error")
+            result = self._result(intent, False, f"Nao encontrei {target}.", "not_found")
         except Exception:
             logging.exception("Falha ao executar a intencao %s.", intent.spec.id)
-            result = self._result(intent, False, self._friendly_error(intent), "error")
+            result = self._result(intent, False, self._friendly_error(intent), "failed")
         self._record(transcript, intent, result)
         return result
 
@@ -299,6 +306,49 @@ class CommandExecutor:
             result.response,
         )
         self._log(transcript, intent, result.executed, result.status)
+        execution = {
+            "completed": "SUCCESS",
+            "confirmed": "SUCCESS",
+            "error": "FAILED",
+            "failed": "FAILED",
+            "not_found": "NOT_FOUND",
+            "ambiguous": "AMBIGUOUS",
+            "permission_required": "BLOCKED",
+            "blocked": "BLOCKED",
+            "awaiting_confirmation": "PENDING",
+        }.get(result.status, result.status.upper())
+        self._emit_debug(transcript, intent, execution)
+
+    def _emit_debug(
+        self,
+        transcript: str,
+        intent: ParsedIntent | None,
+        execution: str,
+    ) -> None:
+        parameters = intent.parameters if intent else {}
+        entity = str(
+            parameters.get("application")
+            or parameters.get("target")
+            or parameters.get("query")
+            or ""
+        )
+        context = self._active_context
+        resolved_target = entity
+        if entity and context.title and normalize_for_trace(entity) in normalize_for_trace(context.title):
+            resolved_target = f"{context.application or context.process_name} - {context.title}"
+        payload: dict[str, object] = {
+            "heard": transcript[:240],
+            "normalized": intent.normalized_text if intent else normalize_for_trace(transcript),
+            "intent": intent.kind.value if intent else "UNKNOWN",
+            "commandId": intent.spec.id if intent else "",
+            "entity": entity,
+            "confidence": intent.confidence if intent else 0.0,
+            "source": intent.source if intent else "none",
+            "route": f"{type(self.actions).__name__}.{intent.spec.executor}" if intent else "",
+            "resolvedTarget": resolved_target,
+            "execution": execution,
+        }
+        self.debug_callback(payload)
 
     @staticmethod
     def _log(
@@ -309,9 +359,13 @@ class CommandExecutor:
     ) -> None:
         payload = {
             "transcript": transcript[:240],
+            "normalized": intent.normalized_text if intent else normalize_for_trace(transcript),
             "intent": intent.spec.id if intent else None,
+            "intent_kind": intent.kind.value if intent else "UNKNOWN",
             "parameters": intent.parameters if intent else {},
             "confidence": intent.confidence if intent else 0.0,
+            "source": intent.source if intent else "none",
+            "route": intent.spec.executor if intent else None,
             "executed": executed,
             "status": status,
         }
@@ -319,3 +373,9 @@ class CommandExecutor:
             "command_event=%s",
             json.dumps(payload, ensure_ascii=False, default=str),
         )
+
+
+def normalize_for_trace(value: str) -> str:
+    from .normalization import normalize_natural_command
+
+    return normalize_natural_command(value)
