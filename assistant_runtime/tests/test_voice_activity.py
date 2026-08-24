@@ -1,9 +1,11 @@
 import unittest
 from array import array
+from pathlib import Path
 
 from assistant_runtime.voice_activity import (
     AudioPreprocessor,
     AudioPreRollBuffer,
+    SileroSpeechDetector,
     TranscriptAccumulator,
     VoiceActivityConfig,
     VoiceActivityEvent,
@@ -170,6 +172,16 @@ class VoiceActivitySessionTests(unittest.TestCase):
             for _ in range(end_frames):
                 event = session.accept(self.silence)
             self.assertEqual(event, VoiceActivityEvent.SPEECH_ENDED)
+
+    def test_silero_onnx_streams_silence_with_real_probability(self) -> None:
+        model = Path(__file__).resolve().parents[1] / "models" / "silero_vad.onnx"
+        detector = SileroSpeechDetector(model, 0.38, 0.24)
+        frame = bytes(VoiceActivityConfig().frame_bytes)
+        decisions = [detector.is_speech(frame, 16_000) for _ in range(20)]
+        self.assertFalse(any(decisions))
+        self.assertGreaterEqual(detector.score, 0.0)
+        self.assertLessEqual(detector.score, 1.0)
+        self.assertEqual(detector.name, "silero-v6-onnx")
 
 
 if __name__ == "__main__":

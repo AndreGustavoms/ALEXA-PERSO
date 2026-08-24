@@ -11,5 +11,8 @@
   "frame_duration_ms": 30,
   "vad_aggressiveness": 0,
   "sensitivity_preset": "VERY_HIGH",
+  "vad_engine": "silero",
+  "silero_threshold": 0.38,
+  "silero_release_threshold": 0.24,
   "maximum_input_gain": 10.0
 }

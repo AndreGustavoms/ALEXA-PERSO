@@ -1,0 +1,8 @@
+{
+  "engine": "auto",
+  "phrase": "ola doktor",
+  "threshold": 0.55,
+  "vad_threshold": 0.35,
+  "consecutive_frames": 2,
+  "model_file": "ola_doktor.onnx"
+}

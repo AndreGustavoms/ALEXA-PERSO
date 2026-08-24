@@ -1,0 +1,32 @@
+{
+  "phrase": "Olá Doktor",
+  "positiveConditions": [
+    "normal",
+    "quiet",
+    "fast",
+    "slow",
+    "near",
+    "far",
+    "keyboard",
+    "fan",
+    "low_music",
+    "different_speakers"
+  ],
+  "negativePhrases": [
+    "Olá",
+    "Doutor",
+    "Doctor",
+    "Olá computador",
+    "Oi",
+    "YouTube",
+    "Discord"
+  ],
+  "metrics": [
+    "wakeRecall",
+    "falseActivationsPerHour",
+    "speechDetectionRecall",
+    "speechCutRate",
+    "wordErrorRate",
+    "endOfSpeechLatencyMs"
+  ]
+}

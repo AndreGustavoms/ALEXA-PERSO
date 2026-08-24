@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  AudioLines,
   Mic,
   MicOff,
   RefreshCw,
@@ -94,6 +95,7 @@ export function VoiceAssistant() {
   const [isPermissionOpen, setIsPermissionOpen] = useState(false);
   const [hasConfirmedPermission, setHasConfirmedPermission] = useState(false);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
+  const [isVoiceLabOpen, setIsVoiceLabOpen] = useState(false);
   const [devices, setDevices] = useState<Array<{ id: number; name: string; default: boolean }>>([]);
   const [microphoneDevice, setMicrophoneDevice] = useState<number | null>(null);
   const [updateChannel, setUpdateChannel] = useState<'stable' | 'beta' | 'dev'>('stable');
@@ -261,6 +263,11 @@ export function VoiceAssistant() {
             : 'idle';
 
   const content = statusContent[status];
+  const diagnostics = backgroundState?.voiceDiagnostics;
+  const rawDbfs = diagnostics?.rawRms ? 20 * Math.log10(diagnostics.rawRms) : -96;
+  const processedDbfs = diagnostics?.processedRms ? 20 * Math.log10(diagnostics.processedRms) : -96;
+  const noiseDbfs = diagnostics?.noiseFloor ? 20 * Math.log10(diagnostics.noiseFloor) : -96;
+  const signalWidth = (dbfs: number) => `${Math.max(0, Math.min(100, ((dbfs + 72) / 72) * 100))}%`;
   const isSoundActive =
     isListening ||
     isSpeaking ||
@@ -427,6 +434,17 @@ export function VoiceAssistant() {
             <h2 id="conversation-title">Atividade</h2>
 
             <div className="conversation-actions">
+              {isBackgroundConnected && (
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => setIsVoiceLabOpen(true)}
+                  aria-label="Voice Lab"
+                  title="Voice Lab"
+                >
+                  <AudioLines aria-hidden="true" />
+                </button>
+              )}
               {isBackgroundConnected && (
                 <button
                   className="icon-button"
@@ -687,6 +705,42 @@ export function VoiceAssistant() {
             <footer className="permission-footer">
               <button className="primary-button" type="button" onClick={() => void finishSetup()}>Concluir</button>
             </footer>
+          </section>
+        </div>
+      )}
+
+      {isVoiceLabOpen && diagnostics && (
+        <div className="permission-backdrop" role="presentation">
+          <section className="permission-dialog voice-lab-dialog" role="dialog" aria-modal="true" aria-labelledby="voice-lab-title">
+            <header className="permission-header">
+              <span className="permission-icon" aria-hidden="true"><AudioLines /></span>
+              <div><p className="panel-kicker">DiagnÃ³stico local</p><h2 id="voice-lab-title">Doktor Voice Lab</h2></div>
+              <button className="icon-button" type="button" onClick={() => setIsVoiceLabOpen(false)} aria-label="Fechar" title="Fechar"><X /></button>
+            </header>
+            <div className="permission-content voice-lab-content">
+              <div className="voice-lab-signal">
+                <span>Entrada bruta</span><strong>{rawDbfs.toFixed(1)} dBFS</strong>
+                <div><i style={{ width: signalWidth(rawDbfs) }} /></div>
+              </div>
+              <div className="voice-lab-signal">
+                <span>Processado</span><strong>{processedDbfs.toFixed(1)} dBFS</strong>
+                <div><i style={{ width: signalWidth(processedDbfs) }} /></div>
+              </div>
+              <dl className="voice-lab-metrics">
+                <div><dt>Noise floor</dt><dd>{noiseDbfs.toFixed(1)} dBFS</dd></div>
+                <div><dt>Silero</dt><dd>{(diagnostics.vadProbability * 100).toFixed(0)}%</dd></div>
+                <div><dt>Wake score</dt><dd>{diagnostics.wakeScore === null ? 'N/D' : diagnostics.wakeScore.toFixed(2)}</dd></div>
+                <div><dt>Threshold</dt><dd>{diagnostics.wakeThreshold === null ? 'N/D' : diagnostics.wakeThreshold.toFixed(2)}</dd></div>
+                <div><dt>Estado</dt><dd>{diagnostics.vadState}</dd></div>
+                <div><dt>SilÃªncio</dt><dd>{diagnostics.silenceDurationMs} ms</dd></div>
+                <div><dt>Buffer</dt><dd>{diagnostics.bufferDurationMs} ms</dd></div>
+                <div><dt>Ganho</dt><dd>{diagnostics.gain.toFixed(1)}x</dd></div>
+              </dl>
+              <div className="voice-lab-engines">
+                <span>Wake</span><strong>{diagnostics.wakeEngine}</strong>
+                <span>VAD</span><strong>{diagnostics.vadEngine}</strong>
+              </div>
+            </div>
           </section>
         </div>
       )}

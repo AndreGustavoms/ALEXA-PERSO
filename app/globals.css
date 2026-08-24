@@ -904,6 +904,115 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.voice-lab-dialog {
+  max-width: 620px;
+}
+
+.voice-lab-content {
+  display: grid;
+  gap: 16px;
+}
+
+.voice-lab-signal {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 7px 12px;
+}
+
+.voice-lab-signal span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.voice-lab-signal strong {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.voice-lab-signal > div {
+  grid-column: 1 / -1;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e7ebf1;
+}
+
+.voice-lab-signal i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 100ms linear;
+}
+
+.voice-lab-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--line);
+}
+
+.voice-lab-metrics div {
+  min-width: 0;
+  padding: 10px;
+  background: var(--surface);
+}
+
+.voice-lab-metrics dt,
+.voice-lab-metrics dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-lab-metrics dt {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.voice-lab-metrics dd {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.voice-lab-engines {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  align-items: center;
+}
+
+.voice-lab-engines span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.voice-lab-engines strong {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .voice-lab-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .voice-diagnostics dt {
   color: var(--muted);
   font-size: 9px;

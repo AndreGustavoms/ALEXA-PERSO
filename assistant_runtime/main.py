@@ -35,12 +35,14 @@ try:
         AudioPreprocessor,
         AudioPreRollBuffer,
         TurnManager,
+        create_speech_detector,
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
         TranscriptAccumulator,
     )
     from .voice_metrics import VoiceMetrics
+    from .wake_word import WakeWordConfig, create_wake_word_engine
     from .app_paths import PATHS
     from .platforms import detect_platform
     from .platforms.system import (
@@ -61,12 +63,14 @@ except ImportError:  # Execucao direta pelo inicializador local.
         AudioPreprocessor,
         AudioPreRollBuffer,
         TurnManager,
+        create_speech_detector,
         TranscriptAccumulator,
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
     )
     from assistant_runtime.voice_metrics import VoiceMetrics
+    from assistant_runtime.wake_word import WakeWordConfig, create_wake_word_engine
     from assistant_runtime.app_paths import PATHS
     from assistant_runtime.platforms import detect_platform
     from assistant_runtime.platforms.system import (
@@ -93,6 +97,7 @@ LOGS_DIRECTORY = PATHS.logs
 LOG_FILE = LOGS_DIRECTORY / "assistant.log"
 PERMISSION_FILE = PATHS.config / "permissions.json"
 VOICE_CONFIG_FILE = PATHS.voice_config
+WAKE_CONFIG_FILE = PATHS.wake_config
 STT_CONFIG_FILE = PATHS.stt_config
 VOICE_METRICS_FILE = PATHS.config / "voice-metrics.json"
 TRAY_ICON_PATH = PATHS.assets / "doktor-assistant.png"
@@ -239,6 +244,11 @@ class AssistantRuntime:
                 "clipping": 0.0,
                 "vadState": "waiting",
                 "vadProbability": 0.0,
+                "vadEngine": "starting",
+                "wakeEngine": "vosk-fallback",
+                "wakeScore": None,
+                "wakeThreshold": None,
+                "wakeModelReady": False,
                 "chunkCount": 0,
                 "bufferDurationMs": 0,
                 "silenceDurationMs": 0,
@@ -883,6 +893,7 @@ class AssistantRuntime:
         self,
         model: vosk.Model,
         configured_voice: VoiceActivityConfig,
+        configured_wake: WakeWordConfig,
     ) -> None:
         stt_provider, _stt_config = create_stt_provider(model, STT_CONFIG_FILE)
         sample_rate = self.select_input_sample_rate(stt_provider.preferred_sample_rate)
@@ -915,7 +926,16 @@ class AssistantRuntime:
                 except queue.Empty:
                     pass
 
-        wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
+        def new_wake_engine():
+            return create_wake_word_engine(
+                configured_wake,
+                recognizer=self.create_recognizer(model, sample_rate, wake=True),
+                variants=WAKE_VARIANTS,
+                model_directory=PATHS.voice_models,
+            )
+
+        wake_engine = new_wake_engine()
+        wake_vad = create_speech_detector(voice_config)
         stt_session: SpeechToTextSession | None = None
         voice_session: TurnManager | None = None
         local_speech_ended = False
@@ -927,7 +947,7 @@ class AssistantRuntime:
 
         def reset_voice_pipeline() -> None:
             nonlocal stt_session, voice_session, local_speech_ended
-            nonlocal captured_frames, realtime_partial, wake_recognizer
+            nonlocal captured_frames, realtime_partial, wake_engine, wake_vad
             nonlocal local_endpoint_at
             if stt_session:
                 stt_session.close()
@@ -938,13 +958,22 @@ class AssistantRuntime:
             realtime_partial = ""
             local_endpoint_at = 0.0
             pre_roll.clear()
-            wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
+            wake_engine = new_wake_engine()
+            wake_vad = create_speech_detector(voice_config)
             self.update_voice_diagnostics(
                 vadState="waiting",
                 chunkCount=0,
                 bufferDurationMs=0,
                 silenceDurationMs=0,
                 speechDurationMs=0,
+                wakeEngine=wake_engine.name,
+                wakeScore=wake_engine.score,
+                wakeThreshold=(
+                    configured_wake.threshold
+                    if wake_engine.name.startswith("openwakeword")
+                    else None
+                ),
+                wakeModelReady=wake_engine.name.startswith("openwakeword"),
             )
             self.update_state(voiceEvent="voice.reset")
 
@@ -992,12 +1021,23 @@ class AssistantRuntime:
 
                 if stt_session is None:
                     pre_roll.append(data)
-                    accepted_wake = wake_recognizer.AcceptWaveform(data)
-                    candidate = self.extract_result(
-                        wake_recognizer.Result() if accepted_wake else wake_recognizer.PartialResult(),
-                        "text" if accepted_wake else "partial",
+                    wake_vad.is_speech(data, sample_rate)
+                    wake_result = wake_engine.accept(data, sample_rate)
+                    self.update_voice_diagnostics(
+                        vadEngine=str(getattr(wake_vad, "name", "custom")),
+                        vadProbability=round(
+                            float(getattr(wake_vad, "score", 0.0)), 4
+                        ),
+                        wakeEngine=wake_result.engine,
+                        wakeScore=wake_result.score,
+                        wakeThreshold=(
+                            configured_wake.threshold
+                            if wake_result.score is not None
+                            else None
+                        ),
+                        wakeModelReady=wake_result.engine.startswith("openwakeword"),
                     )
-                    if not self.contains_wake_phrase(candidate):
+                    if not wake_result.detected:
                         continue
 
                     buffered_frames = pre_roll.snapshot()
@@ -1055,7 +1095,8 @@ class AssistantRuntime:
                 stt_session.send_audio(data)
                 self.update_voice_diagnostics(
                     vadState=voice_event.value,
-                    vadProbability=1.0 if voice_session.last_is_speech else 0.0,
+                    vadProbability=round(voice_session.vad_probability, 4),
+                    vadEngine=voice_session.vad_engine,
                     chunkCount=captured_frames,
                     bufferDurationMs=captured_frames * voice_config.frame_duration_ms,
                     silenceDurationMs=round(voice_session.silence_seconds * 1_000),
@@ -1166,6 +1207,7 @@ class AssistantRuntime:
                 )
 
             voice_config = VoiceActivityConfig.from_file(VOICE_CONFIG_FILE)
+            wake_config = WakeWordConfig.from_file(WAKE_CONFIG_FILE)
             vosk.SetLogLevel(-1)
             model = vosk.Model(str(MODEL_DIRECTORY))
         except Exception as error:
@@ -1176,7 +1218,7 @@ class AssistantRuntime:
         reported_microphone_error = False
         while not self.stop_event.is_set():
             try:
-                self.run_hybrid_audio_session(model, voice_config)
+                self.run_hybrid_audio_session(model, voice_config, wake_config)
                 if self.stop_event.is_set():
                     return
                 continue

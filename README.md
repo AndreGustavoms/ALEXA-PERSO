@@ -8,6 +8,9 @@ Assistente local do ecossistema Doktor. Permanece em segundo plano, reconhece um
 ativacao sem enviar o audio para um servidor e responde usando a voz instalada
 no computador.
 
+O **Voice Lab** mostra entrada bruta/processada, noise floor, score Silero,
+estado do turno e disponibilidade do modelo de wake word sem salvar audio.
+
 ## Instalar (recomendado)
 
 Abra [GitHub Releases](https://github.com/AndreGustavoms/ALEXA-PERSO/releases),

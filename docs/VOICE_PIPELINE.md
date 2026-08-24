@@ -22,20 +22,26 @@ Ao detectar "Ola, Doktor", o STT e criado antes do bip e recebe 750 ms de
 pre-roll. Assim, "Ola, Doktor abre o Chrome" e o comando dito depois do bip usam
 o mesmo stream sem perder o inicio.
 
-## Detector
+## Detectores
 
-O pacote padrao continua com WebRTC VAD em modo 0 (`VERY_HIGH`). Ele e pequeno,
-streaming e compativel com 8, 16, 32 e 48 kHz. A interface `SpeechDetector`
-permite adicionar Silero ONNX futuramente sem acoplar captura, STT ou turnos. O
-runtime ONNX nao foi incluido no pacote leve por causa do aumento de tamanho e
-memoria.
+Silero VAD v6 roda pelo modelo ONNX oficial, sem Torch ou Torchaudio. O wrapper
+mantem estado streaming, converte 32/48 kHz para 16 kHz e publica o score real.
+WebRTC VAD em modo 0 (`VERY_HIGH`) permanece como fallback para arquiteturas sem
+ONNX Runtime.
+
+`WakeWordEngine` tenta carregar openWakeWord 0.6.0 somente quando o modelo
+`ola_doktor.onnx` e os modelos de features estao presentes. Ate o modelo
+portugues ser treinado e avaliado, o Vosk local continua como fallback. Nesse
+fallback nao existe score de confianca e a API retorna `null`.
 
 ## Diagnostico e privacidade
 
 A API publica somente RMS bruto/processado, pico, noise floor, ganho, clipping,
-decisao binaria do VAD, chunks e duracoes. Audio bruto nao e salvo. O painel fica
-na configuracao do microfone e serve para diagnosticar fala baixa sem registrar
-conteudo.
+score do Silero, engine/score da wake word, chunks e duracoes. Audio bruto nao e
+salvo. O Voice Lab serve para diagnosticar fala baixa sem registrar conteudo.
+
+O manifesto de avaliacao fica em `voice_lab/evaluation_manifest.json`, e a
+configuracao inicial de treinamento em `voice_lab/openwakeword/ola_doktor.yml`.
 
 ## Defaults conversacionais
 

@@ -46,8 +46,11 @@ datas = [
     (str(ROOT / "VERSION"), "."),
     (str(ROOT / "dist"), "dist"),
     (str(ROOT / "assets"), "assets"),
+    (str(ROOT / "licenses"), "licenses"),
     (str(MODEL), "runtime/models/vosk-model-small-pt-0.3"),
     (str(ROOT / "assistant_runtime/voice_config.json"), "assistant_runtime"),
+    (str(ROOT / "assistant_runtime/wake_word_config.json"), "assistant_runtime"),
+    (str(ROOT / "assistant_runtime/models"), "assistant_runtime/models"),
     (str(ROOT / "assistant_runtime/stt_config.json"), "assistant_runtime"),
     (str(ROOT / "assistant_runtime/transcription_vocabulary.txt"), "assistant_runtime"),
 ]
@@ -75,7 +78,15 @@ a = Analysis(
     hooksconfig={},
     hookspath=[str(ROOT / "packaging/hooks")],
     runtime_hooks=[],
-    excludes=["tkinter", "pytest"],
+    excludes=[
+        "tkinter",
+        "pytest",
+        "openwakeword",
+        "scipy",
+        "sklearn",
+        "joblib",
+        "narwhals",
+    ],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

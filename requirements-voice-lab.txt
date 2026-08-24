@@ -1,0 +1,2 @@
+# Optional training/inference environment for a custom Portuguese wake model.
+openwakeword==0.6.0

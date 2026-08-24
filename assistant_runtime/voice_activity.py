@@ -26,6 +26,9 @@ class VoiceActivityConfig:
     frame_duration_ms: int = 30
     vad_aggressiveness: int = 0
     sensitivity_preset: str = "VERY_HIGH"
+    vad_engine: str = "silero"
+    silero_threshold: float = 0.38
+    silero_release_threshold: float = 0.24
     maximum_input_gain: float = 10.0
 
     def __post_init__(self) -> None:
@@ -47,6 +50,10 @@ class VoiceActivityConfig:
             raise ValueError("vad_aggressiveness deve ficar entre 0 e 3.")
         if self.sensitivity_preset not in {"NORMAL", "HIGH", "VERY_HIGH"}:
             raise ValueError("sensitivity_preset invalido.")
+        if self.vad_engine not in {"silero", "webrtc"}:
+            raise ValueError("vad_engine deve ser silero ou webrtc.")
+        if not 0.05 <= self.silero_release_threshold < self.silero_threshold <= 0.95:
+            raise ValueError("Thresholds Silero invalidos.")
         if not 1.0 <= self.maximum_input_gain <= 20.0:
             raise ValueError("maximum_input_gain deve ficar entre 1 e 20.")
         if not 0.3 <= self.pre_roll_duration <= 2.0:
@@ -135,9 +142,104 @@ class SpeechDetector(Protocol):
 class WebRtcSpeechDetector:
     def __init__(self, aggressiveness: int) -> None:
         self._detector = webrtcvad.Vad(aggressiveness)
+        self.score = 0.0
+        self.name = "webrtc"
 
     def is_speech(self, frame: bytes, sample_rate: int) -> bool:
-        return self._detector.is_speech(frame, sample_rate)
+        detected = self._detector.is_speech(frame, sample_rate)
+        self.score = 1.0 if detected else 0.0
+        return detected
+
+
+class SileroSpeechDetector:
+    """Streaming Silero v6 ONNX inference without Torch or Torchaudio."""
+
+    def __init__(
+        self,
+        model_path: Path,
+        threshold: float,
+        release_threshold: float,
+    ) -> None:
+        import numpy as np
+        import onnxruntime as ort
+
+        options = ort.SessionOptions()
+        options.inter_op_num_threads = 1
+        options.intra_op_num_threads = 1
+        self._np = np
+        self._session = ort.InferenceSession(
+            str(model_path),
+            sess_options=options,
+            providers=["CPUExecutionProvider"],
+        )
+        self.threshold = threshold
+        self.release_threshold = release_threshold
+        self.score = 0.0
+        self.name = "silero-v6-onnx"
+        self._active = False
+        self._sample_rate = 16_000
+        self._frame_samples = 512
+        self._context_samples = 64
+        self._pending = np.empty(0, dtype=np.float32)
+        self._state = np.zeros((2, 1, 128), dtype=np.float32)
+        self._context = np.zeros((1, self._context_samples), dtype=np.float32)
+
+    def _configure_rate(self, source_rate: int) -> int:
+        target_rate = 16_000 if source_rate >= 16_000 else 8_000
+        if source_rate % target_rate:
+            raise ValueError(f"Silero nao suporta captura em {source_rate} Hz.")
+        if target_rate != self._sample_rate:
+            self._sample_rate = target_rate
+            self._frame_samples = 512 if target_rate == 16_000 else 256
+            self._context_samples = 64 if target_rate == 16_000 else 32
+            self._pending = self._np.empty(0, dtype=self._np.float32)
+            self._state = self._np.zeros((2, 1, 128), dtype=self._np.float32)
+            self._context = self._np.zeros(
+                (1, self._context_samples), dtype=self._np.float32
+            )
+        return source_rate // target_rate
+
+    def is_speech(self, frame: bytes, sample_rate: int) -> bool:
+        step = self._configure_rate(sample_rate)
+        pcm = self._np.frombuffer(frame, dtype=self._np.int16)[::step]
+        normalized = pcm.astype(self._np.float32) / 32_768.0
+        self._pending = self._np.concatenate((self._pending, normalized))
+
+        while self._pending.size >= self._frame_samples:
+            chunk = self._pending[: self._frame_samples]
+            self._pending = self._pending[self._frame_samples :]
+            model_input = self._np.concatenate((self._context[0], chunk))[None, :]
+            output, self._state = self._session.run(
+                None,
+                {
+                    "input": model_input,
+                    "state": self._state,
+                    "sr": self._np.array(self._sample_rate, dtype=self._np.int64),
+                },
+            )
+            self._context = model_input[:, -self._context_samples :]
+            self.score = float(output[0][0])
+
+        if self._active:
+            self._active = self.score >= self.release_threshold
+        else:
+            self._active = self.score >= self.threshold
+        return self._active
+
+
+def create_speech_detector(config: VoiceActivityConfig) -> SpeechDetector:
+    if config.vad_engine == "silero":
+        model_path = Path(__file__).resolve().parent / "models" / "silero_vad.onnx"
+        try:
+            return SileroSpeechDetector(
+                model_path,
+                config.silero_threshold,
+                config.silero_release_threshold,
+            )
+        except (ImportError, OSError, RuntimeError, ValueError):
+            # Packaged ARM/legacy machines remain functional without ONNX Runtime.
+            pass
+    return WebRtcSpeechDetector(config.vad_aggressiveness)
 
 
 class TranscriptAccumulator:
@@ -179,7 +281,7 @@ class TurnManager:
         detector: SpeechDetector | None = None,
     ) -> None:
         self.config = config
-        self.detector = detector or WebRtcSpeechDetector(config.vad_aggressiveness)
+        self.detector = detector or create_speech_detector(config)
         self.has_started = False
         self._finished = False
         self._elapsed_frames = 0
@@ -188,6 +290,8 @@ class TurnManager:
         self._possible_end_emitted = False
         self.state = TurnState.WAITING
         self.last_is_speech = False
+        self.vad_probability = 0.0
+        self.vad_engine = str(getattr(self.detector, "name", "custom"))
 
     def accept(self, frame: bytes) -> VoiceActivityEvent:
         if self._finished:
@@ -201,6 +305,9 @@ class TurnManager:
         self._elapsed_frames += 1
         contains_speech = self.detector.is_speech(frame, self.config.sample_rate)
         self.last_is_speech = contains_speech
+        self.vad_probability = float(
+            getattr(self.detector, "score", 1.0 if contains_speech else 0.0)
+        )
 
         if not self.has_started:
             # A single VAD miss must not erase an otherwise valid quiet onset.

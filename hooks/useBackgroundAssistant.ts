@@ -92,6 +92,11 @@ export interface BackgroundAssistantState {
     clipping: number;
     vadState: string;
     vadProbability: number;
+    vadEngine: string;
+    wakeEngine: string;
+    wakeScore: number | null;
+    wakeThreshold: number | null;
+    wakeModelReady: boolean;
     chunkCount: number;
     bufferDurationMs: number;
     silenceDurationMs: number;

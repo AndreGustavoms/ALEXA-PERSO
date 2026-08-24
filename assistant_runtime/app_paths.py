@@ -52,6 +52,8 @@ class AppPaths:
     logs: Path
     assets: Path
     voice_config: Path
+    wake_config: Path
+    voice_models: Path
     stt_config: Path
     vocabulary: Path
 
@@ -70,6 +72,8 @@ class AppPaths:
             logs=data / "logs",
             assets=resources / "assets",
             voice_config=runtime_resources / "voice_config.json",
+            wake_config=runtime_resources / "wake_word_config.json",
+            voice_models=runtime_resources / "models",
             stt_config=runtime_resources / "stt_config.json",
             vocabulary=runtime_resources / "transcription_vocabulary.txt",
         )
