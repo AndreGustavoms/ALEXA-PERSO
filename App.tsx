@@ -7,7 +7,7 @@ export function App() {
         <a className="brand" href="#assistant" aria-label="Doktor Assistant - início">
           <img className="brand-mark" src="/doktor-mark.svg" alt="" />
           <span className="brand-copy">
-            <strong>Doktor Assistant</strong>
+            <h1>Doktor Assistant</h1>
             <small>Voice system</small>
           </span>
         </a>

@@ -84,9 +84,11 @@ a:focus-visible {
   gap: 1px;
 }
 
-.brand-copy strong {
+.brand-copy h1 {
   font-size: 15px;
   font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .brand-copy small {
@@ -493,6 +495,37 @@ a:focus-visible {
   width: 78px;
   height: 78px;
   opacity: 0.1;
+}
+
+/* O painel ocupa metade da largura em desktop; sem texto, ficava um vazio grande
+   sem dizer o que fazer. A orientação nasce junto da marca, não no lugar dela. */
+.empty-conversation {
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.empty-conversation__title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.empty-conversation__hint {
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.empty-conversation__offline {
+  max-width: 34ch;
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .message-list {
