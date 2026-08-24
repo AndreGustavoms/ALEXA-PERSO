@@ -12,9 +12,11 @@ import {
   Square,
   Volume2,
   VolumeX,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PermissionDialog } from './PermissionDialog';
+import { SetupDialog } from './SetupDialog';
+import { VoiceLabDialog } from './VoiceLabDialog';
 import { useBackgroundAssistant } from '@/hooks/useBackgroundAssistant';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
@@ -264,10 +266,6 @@ export function VoiceAssistant() {
 
   const content = statusContent[status];
   const diagnostics = backgroundState?.voiceDiagnostics;
-  const rawDbfs = diagnostics?.rawRms ? 20 * Math.log10(diagnostics.rawRms) : -96;
-  const processedDbfs = diagnostics?.processedRms ? 20 * Math.log10(diagnostics.processedRms) : -96;
-  const noiseDbfs = diagnostics?.noiseFloor ? 20 * Math.log10(diagnostics.noiseFloor) : -96;
-  const signalWidth = (dbfs: number) => `${Math.max(0, Math.min(100, ((dbfs + 72) / 72) * 100))}%`;
   const isSoundActive =
     isListening ||
     isSpeaking ||
@@ -504,8 +502,19 @@ export function VoiceAssistant() {
               </div>
             </div>
           ) : !transcript && !response ? (
-            <div className="empty-conversation" aria-label="Nenhuma atividade recente">
+            <div className="empty-conversation">
               <img src="/doktor-mark.svg" alt="" />
+              <p className="empty-conversation__title">Nenhuma atividade ainda</p>
+              <p className="empty-conversation__hint">
+                Diga <strong>&ldquo;Olá, Doktor&rdquo;</strong> e aguarde o sinal sonoro para
+                falar. O que você pedir e a resposta aparecem aqui.
+              </p>
+              {!isBackgroundConnected && (
+                <p className="empty-conversation__offline">
+                  O assistente em segundo plano não está em execução — inicie o Doktor
+                  Assistant para usar a voz.
+                </p>
+              )}
             </div>
           ) : (
             <div className="message-list">
@@ -557,205 +566,36 @@ export function VoiceAssistant() {
       </div>
 
       {isPermissionOpen && (
-        <div
-          className="permission-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closePermissionDialog();
-            }
-          }}
-        >
-          <section
-            className="permission-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="permission-title"
-          >
-            <header className="permission-header">
-              <span className="permission-icon" aria-hidden="true">
-                {permissionAccepted ? <ShieldCheck /> : <ShieldAlert />}
-              </span>
-              <div>
-                <p className="panel-kicker">Autorização local</p>
-                <h2 id="permission-title">Permissão total para ações locais</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={closePermissionDialog}
-                aria-label="Fechar autorização"
-                title="Fechar"
-              >
-                <X aria-hidden="true" />
-              </button>
-            </header>
-
-            <div className="permission-content">
-              <p>
-                Esta autorização permite que a Doktor Assistant execute comandos de voz
-                registrados usando os privilégios da sua conta atual do Windows.
-              </p>
-              <ul>
-                <li>Abrir aplicativos, sites, pesquisas e pastas.</li>
-                <li>Controlar volume, reprodução e outras ações implementadas.</li>
-                <li>Continuar ativo em segundo plano aguardando a frase de ativação.</li>
-              </ul>
-              <div className="permission-warning">
-                <ShieldAlert aria-hidden="true" />
-                <p>
-                  Uma pessoa ou áudio próximo ao microfone também pode dar comandos.
-                  Esta permissão não ignora o UAC, e ações destrutivas continuam
-                  exigindo confirmação forte.
-                </p>
-              </div>
-
-              {permissionAccepted ? (
-                <p className="permission-status">
-                  <ShieldCheck aria-hidden="true" />
-                  Permissão ativa neste computador.
-                </p>
-              ) : (
-                <label className="permission-consent">
-                  <input
-                    type="checkbox"
-                    checked={hasConfirmedPermission}
-                    onChange={(event) =>
-                      setHasConfirmedPermission(event.target.checked)
-                    }
-                    autoFocus
-                  />
-                  <span>
-                    Li e autorizo a Doktor Assistant a executar essas ações quando forem
-                    solicitadas por voz.
-                  </span>
-                </label>
-              )}
-            </div>
-
-            <footer className="permission-footer">
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={closePermissionDialog}
-              >
-                Fechar
-              </button>
-              {permissionAccepted ? (
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => void handlePermissionChange(false)}
-                >
-                  Revogar permissão
-                </button>
-              ) : (
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={!hasConfirmedPermission}
-                  onClick={() => void handlePermissionChange(true)}
-                >
-                  <ShieldCheck aria-hidden="true" />
-                  Aceitar e ativar
-                </button>
-              )}
-            </footer>
-          </section>
-        </div>
+        <PermissionDialog
+          permissionAccepted={permissionAccepted}
+          hasConfirmedPermission={hasConfirmedPermission}
+          onConfirmChange={setHasConfirmedPermission}
+          onPermissionChange={(aceitar) => void handlePermissionChange(aceitar)}
+          onClose={closePermissionDialog}
+        />
       )}
 
       {isSetupOpen && (
-        <div className="permission-backdrop" role="presentation">
-          <section className="permission-dialog setup-dialog" role="dialog" aria-modal="true" aria-labelledby="setup-title">
-            <header className="permission-header">
-              <span className="permission-icon" aria-hidden="true"><Mic /></span>
-              <div><p className="panel-kicker">Doktor {backgroundState?.version}</p><h2 id="setup-title">Configurar assistente</h2></div>
-              {backgroundState?.settings?.onboarding_complete && (
-                <button className="icon-button" type="button" onClick={() => setIsSetupOpen(false)} aria-label="Fechar" title="Fechar"><X /></button>
-              )}
-            </header>
-            <div className="permission-content setup-fields">
-              <label>
-                <span>Microfone</span>
-                <select value={microphoneDevice ?? ''} onChange={(event) => setMicrophoneDevice(event.target.value === '' ? null : Number(event.target.value))}>
-                  <option value="">Padrão do sistema</option>
-                  {devices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.default ? ' (padrão)' : ''}</option>)}
-                </select>
-              </label>
-              <div className="level-field"><span>Nível de entrada</span><div className="input-level"><i style={{ width: `${Math.min(100, (backgroundState?.audioLevel ?? 0) * 180)}%` }} /></div></div>
-              {backgroundState?.voiceDiagnostics && (
-                <dl className="voice-diagnostics">
-                  <div><dt>RAW RMS</dt><dd>{backgroundState.voiceDiagnostics.rawRms.toFixed(4)}</dd></div>
-                  <div><dt>Processado</dt><dd>{backgroundState.voiceDiagnostics.processedRms.toFixed(4)}</dd></div>
-                  <div><dt>Ruído</dt><dd>{backgroundState.voiceDiagnostics.noiseFloor.toFixed(4)}</dd></div>
-                  <div><dt>Ganho</dt><dd>{backgroundState.voiceDiagnostics.gain.toFixed(1)}x</dd></div>
-                  <div><dt>VAD</dt><dd>{backgroundState.voiceDiagnostics.vadState}</dd></div>
-                  <div><dt>Silêncio</dt><dd>{backgroundState.voiceDiagnostics.silenceDurationMs} ms</dd></div>
-                </dl>
-              )}
-              <label>
-                <span>Atualizações</span>
-                <select value={updateChannel} onChange={(event) => setUpdateChannel(event.target.value as 'stable' | 'beta' | 'dev')}>
-                  <option value="stable">Estável</option><option value="beta">Beta</option><option value="dev">Desenvolvimento</option>
-                </select>
-              </label>
-              <label className="setup-toggle"><input type="checkbox" checked={autostart} onChange={(event) => setAutostartChoice(event.target.checked)} /><span>Iniciar com o sistema</span></label>
-            </div>
-            <footer className="permission-footer">
-              <button className="primary-button" type="button" onClick={() => void finishSetup()}>Concluir</button>
-            </footer>
-          </section>
-        </div>
+        <SetupDialog
+          backgroundState={backgroundState}
+          devices={devices}
+          microphoneDevice={microphoneDevice}
+          onMicrophoneChange={setMicrophoneDevice}
+          updateChannel={updateChannel}
+          onUpdateChannelChange={setUpdateChannel}
+          autostart={autostart}
+          onAutostartChange={setAutostartChoice}
+          onFinish={() => void finishSetup()}
+          onClose={() => setIsSetupOpen(false)}
+        />
       )}
 
       {isVoiceLabOpen && diagnostics && (
-        <div className="permission-backdrop" role="presentation">
-          <section className="permission-dialog voice-lab-dialog" role="dialog" aria-modal="true" aria-labelledby="voice-lab-title">
-            <header className="permission-header">
-              <span className="permission-icon" aria-hidden="true"><AudioLines /></span>
-              <div><p className="panel-kicker">Diagnóstico local</p><h2 id="voice-lab-title">Doktor Voice Lab</h2></div>
-              <button className="icon-button" type="button" onClick={() => setIsVoiceLabOpen(false)} aria-label="Fechar" title="Fechar"><X /></button>
-            </header>
-            <div className="permission-content voice-lab-content">
-              <div className="voice-lab-signal">
-                <span>Entrada bruta</span><strong>{rawDbfs.toFixed(1)} dBFS</strong>
-                <div><i style={{ width: signalWidth(rawDbfs) }} /></div>
-              </div>
-              <div className="voice-lab-signal">
-                <span>Processado</span><strong>{processedDbfs.toFixed(1)} dBFS</strong>
-                <div><i style={{ width: signalWidth(processedDbfs) }} /></div>
-              </div>
-              <dl className="voice-lab-metrics">
-                <div><dt>Noise floor</dt><dd>{noiseDbfs.toFixed(1)} dBFS</dd></div>
-                <div><dt>Silero</dt><dd>{(diagnostics.vadProbability * 100).toFixed(0)}%</dd></div>
-                <div><dt>Wake score</dt><dd>{diagnostics.wakeScore === null ? 'N/D' : diagnostics.wakeScore.toFixed(2)}</dd></div>
-                <div><dt>Threshold</dt><dd>{diagnostics.wakeThreshold === null ? 'N/D' : diagnostics.wakeThreshold.toFixed(2)}</dd></div>
-                <div><dt>Estado</dt><dd>{diagnostics.vadState}</dd></div>
-                <div><dt>Silêncio</dt><dd>{diagnostics.silenceDurationMs} ms</dd></div>
-                <div><dt>Buffer</dt><dd>{diagnostics.bufferDurationMs} ms</dd></div>
-                <div><dt>Ganho</dt><dd>{diagnostics.gain.toFixed(1)}x</dd></div>
-              </dl>
-              <div className="voice-lab-engines">
-                <span>Wake</span><strong>{diagnostics.wakeEngine}</strong>
-                <span>VAD</span><strong>{diagnostics.vadEngine}</strong>
-              </div>
-              {backgroundState?.commandDebug && (
-                <dl className="command-debug">
-                  <div><dt>Ouvido</dt><dd>{backgroundState.commandDebug.heard}</dd></div>
-                  <div><dt>Normalizado</dt><dd>{backgroundState.commandDebug.normalized}</dd></div>
-                  <div><dt>Intenção</dt><dd>{backgroundState.commandDebug.intent}</dd></div>
-                  <div><dt>Entidade</dt><dd>{backgroundState.commandDebug.entity || 'N/D'}</dd></div>
-                  <div><dt>Confiança</dt><dd>{Math.round(backgroundState.commandDebug.confidence * 100)}%</dd></div>
-                  <div><dt>Origem</dt><dd>{backgroundState.commandDebug.source}</dd></div>
-                  <div><dt>Alvo</dt><dd>{backgroundState.commandDebug.resolvedTarget || 'N/D'}</dd></div>
-                  <div><dt>Rota</dt><dd>{backgroundState.commandDebug.route || 'N/D'}</dd></div>
-                  <div><dt>Execução</dt><dd>{backgroundState.commandDebug.execution}</dd></div>
-                </dl>
-              )}
-            </div>
-          </section>
-        </div>
+        <VoiceLabDialog
+          diagnostics={diagnostics}
+          commandDebug={backgroundState?.commandDebug}
+          onClose={() => setIsVoiceLabOpen(false)}
+        />
       )}
     </>
   );
