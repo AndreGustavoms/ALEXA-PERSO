@@ -1,10 +1,12 @@
 import unittest
+from array import array
 
 from assistant_runtime.voice_activity import (
     TranscriptAccumulator,
     VoiceActivityConfig,
     VoiceActivityEvent,
     VoiceActivitySession,
+    normalize_pcm16,
 )
 
 
@@ -85,6 +87,30 @@ class VoiceActivitySessionTests(unittest.TestCase):
         transcript.add("abra o youtube")
         transcript.add("youtube para mim")
         self.assertEqual(transcript.finish(), "abra o youtube para mim")
+
+    def test_default_voice_detection_accepts_quiet_speech_quickly(self) -> None:
+        config = VoiceActivityConfig()
+
+        self.assertEqual(config.vad_aggressiveness, 1)
+        self.assertEqual(config.minimum_speech_duration, 0.09)
+        self.assertEqual(config.maximum_input_gain, 10.0)
+        self.assertEqual(config.frames_for(config.minimum_speech_duration), 3)
+
+    def test_normalizes_quiet_pcm_without_clipping(self) -> None:
+        samples = array("h", [100, -200, 400, -600])
+        normalized = array("h")
+        normalized.frombytes(normalize_pcm16(samples.tobytes(), 10.0))
+
+        self.assertEqual(normalized.tolist(), [1000, -2000, 4000, -6000])
+
+    def test_loud_pcm_is_not_amplified_past_target(self) -> None:
+        samples = array("h", [20_000, -20_000])
+
+        self.assertEqual(normalize_pcm16(samples.tobytes(), 10.0), samples.tobytes())
+
+    def test_rejects_invalid_input_gain(self) -> None:
+        with self.assertRaises(ValueError):
+            VoiceActivityConfig(maximum_input_gain=21.0)
 
 
 if __name__ == "__main__":

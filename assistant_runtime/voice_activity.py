@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from array import array
 from dataclasses import dataclass, fields, replace
 from enum import Enum
 from pathlib import Path
@@ -12,13 +13,14 @@ import webrtcvad
 
 @dataclass(frozen=True)
 class VoiceActivityConfig:
-    activation_start_timeout: float = 7.0
+    activation_start_timeout: float = 10.0
     speech_end_silence: float = 0.9
-    minimum_speech_duration: float = 0.24
+    minimum_speech_duration: float = 0.09
     maximum_phrase_duration: None = None
     sample_rate: int = 16_000
     frame_duration_ms: int = 30
-    vad_aggressiveness: int = 3
+    vad_aggressiveness: int = 1
+    maximum_input_gain: float = 10.0
 
     def __post_init__(self) -> None:
         if not 1.0 <= self.activation_start_timeout <= 30.0:
@@ -35,6 +37,8 @@ class VoiceActivityConfig:
             raise ValueError("frame_duration_ms deve ser 10, 20 ou 30 ms.")
         if self.vad_aggressiveness not in (0, 1, 2, 3):
             raise ValueError("vad_aggressiveness deve ficar entre 0 e 3.")
+        if not 1.0 <= self.maximum_input_gain <= 20.0:
+            raise ValueError("maximum_input_gain deve ficar entre 1 e 20.")
 
     @property
     def frame_samples(self) -> int:
@@ -65,6 +69,30 @@ class VoiceActivityConfig:
             names = ", ".join(sorted(unknown))
             raise ValueError(f"Parâmetros de voz desconhecidos: {names}.")
         return cls(**payload)
+
+
+def normalize_pcm16(
+    frame: bytes,
+    maximum_gain: float,
+    target_peak: float = 0.2,
+) -> bytes:
+    """Lift quiet microphone input while limiting already-loud frames."""
+    if maximum_gain <= 1.0 or not frame:
+        return frame
+    samples = array("h")
+    samples.frombytes(frame)
+    peak = max((abs(value) for value in samples), default=0)
+    if not peak:
+        return frame
+
+    target = max(1, min(32_767, int(32_767 * target_peak)))
+    gain = min(maximum_gain, max(1.0, target / peak))
+    if gain <= 1.0:
+        return frame
+
+    for index, value in enumerate(samples):
+        samples[index] = max(-32_768, min(32_767, round(value * gain)))
+    return samples.tobytes()
 
 
 class VoiceActivityEvent(Enum):

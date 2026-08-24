@@ -1,9 +1,10 @@
 {
-  "activation_start_timeout": 7.0,
+  "activation_start_timeout": 10.0,
   "speech_end_silence": 0.9,
-  "minimum_speech_duration": 0.24,
+  "minimum_speech_duration": 0.09,
   "maximum_phrase_duration": null,
   "sample_rate": 16000,
   "frame_duration_ms": 30,
-  "vad_aggressiveness": 3
+  "vad_aggressiveness": 1,
+  "maximum_input_gain": 10.0
 }

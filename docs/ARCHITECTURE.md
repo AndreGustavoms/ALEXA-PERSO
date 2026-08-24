@@ -44,3 +44,12 @@ Fechar aba, janela ou aplicativo é uma ação contextual imediata. Confirmaçã
 reservada para ações destrutivas, como desligar ou reiniciar o computador. Uma
 nova frase executável substitui uma confirmação pendente; apenas respostas
 isoladas como `sim` e `não` resolvem essa confirmação.
+
+## Sensibilidade do microfone
+
+Cada quadro PCM passa por ganho automático limitado antes de alimentar wake
+word, VAD e STT. `maximum_input_gain` define apenas o ganho máximo; quadros já
+altos recebem ganho menor para evitar clipping. O VAD local usa agressividade
+1 e confirma o início após 90 ms de voz, mantendo 900 ms de silêncio contínuo
+para encerrar a frase. Esses parâmetros ficam em
+`assistant_runtime/voice_config.json` e são validados na inicialização.

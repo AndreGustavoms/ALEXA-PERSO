@@ -32,6 +32,7 @@ try:
     from .replies import create_assistant_reply
     from .stt import STTEventType, SpeechToTextSession, create_stt_provider
     from .voice_activity import (
+        normalize_pcm16,
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
@@ -55,6 +56,7 @@ except ImportError:  # Execucao direta pelo inicializador local.
     from assistant_runtime.replies import create_assistant_reply
     from assistant_runtime.stt import STTEventType, SpeechToTextSession, create_stt_provider
     from assistant_runtime.voice_activity import (
+        normalize_pcm16,
         TranscriptAccumulator,
         VoiceActivityConfig,
         VoiceActivityEvent,
@@ -683,13 +685,17 @@ class AssistantRuntime:
             del frames, time_info
             if status:
                 logging.warning("Estado do microfone: %s", status)
-            self.update_audio_level(bytes(indata))
+            normalized_audio = normalize_pcm16(
+                bytes(indata),
+                voice_config.maximum_input_gain,
+            )
+            self.update_audio_level(normalized_audio)
             try:
-                audio_queue.put_nowait(bytes(indata))
+                audio_queue.put_nowait(normalized_audio)
             except queue.Full:
                 try:
                     audio_queue.get_nowait()
-                    audio_queue.put_nowait(bytes(indata))
+                    audio_queue.put_nowait(normalized_audio)
                 except queue.Empty:
                     pass
 
@@ -838,13 +844,17 @@ class AssistantRuntime:
             del frames, time_info
             if status:
                 logging.warning("Estado do microfone: %s", status)
-            self.update_audio_level(bytes(indata))
+            normalized_audio = normalize_pcm16(
+                bytes(indata),
+                voice_config.maximum_input_gain,
+            )
+            self.update_audio_level(normalized_audio)
             try:
-                audio_queue.put_nowait(bytes(indata))
+                audio_queue.put_nowait(normalized_audio)
             except queue.Full:
                 try:
                     audio_queue.get_nowait()
-                    audio_queue.put_nowait(bytes(indata))
+                    audio_queue.put_nowait(normalized_audio)
                 except queue.Empty:
                     pass
 
@@ -886,9 +896,11 @@ class AssistantRuntime:
                 sttProvider=stt_provider.name,
             )
             logging.info(
-                "Pipeline hibrido iniciado em %s Hz; STT=%s.",
+                "Pipeline hibrido iniciado em %s Hz; STT=%s; ganho maximo=%.1fx; VAD=%s.",
                 sample_rate,
                 stt_provider.name,
+                voice_config.maximum_input_gain,
+                voice_config.vad_aggressiveness,
             )
 
             while not self.stop_event.is_set():
