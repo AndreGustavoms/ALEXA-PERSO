@@ -32,7 +32,9 @@ try:
     from .replies import create_assistant_reply
     from .stt import STTEventType, SpeechToTextSession, create_stt_provider
     from .voice_activity import (
-        normalize_pcm16,
+        AudioPreprocessor,
+        AudioPreRollBuffer,
+        TurnManager,
         VoiceActivityConfig,
         VoiceActivityEvent,
         VoiceActivitySession,
@@ -56,7 +58,9 @@ except ImportError:  # Execucao direta pelo inicializador local.
     from assistant_runtime.replies import create_assistant_reply
     from assistant_runtime.stt import STTEventType, SpeechToTextSession, create_stt_provider
     from assistant_runtime.voice_activity import (
-        normalize_pcm16,
+        AudioPreprocessor,
+        AudioPreRollBuffer,
+        TurnManager,
         TranscriptAccumulator,
         VoiceActivityConfig,
         VoiceActivityEvent,
@@ -226,6 +230,21 @@ class AssistantRuntime:
             "update": self.update_service.snapshot(),
             "autostart": self.is_autostart_enabled(),
             "audioLevel": 0.0,
+            "voiceDiagnostics": {
+                "rawRms": 0.0,
+                "processedRms": 0.0,
+                "peak": 0.0,
+                "noiseFloor": 0.0,
+                "gain": 1.0,
+                "clipping": 0.0,
+                "vadState": "waiting",
+                "vadProbability": 0.0,
+                "chunkCount": 0,
+                "bufferDurationMs": 0,
+                "silenceDurationMs": 0,
+                "speechDurationMs": 0,
+            },
+            "voiceEvent": "voice.reset",
         }
         self.icon: pystray.Icon | None = None
         self.local_server: ThreadingHTTPServer | None = None
@@ -269,6 +288,13 @@ class AssistantRuntime:
         with self.state_lock:
             self.state["audioLevel"] = level
         self.last_audio_level_update = now
+
+    def update_voice_diagnostics(self, **changes: object) -> None:
+        with self.state_lock:
+            current = self.state.get("voiceDiagnostics", {})
+            diagnostics = dict(current) if isinstance(current, dict) else {}
+            diagnostics.update(changes)
+            self.state["voiceDiagnostics"] = diagnostics
 
     def set_listening(self, enabled: bool) -> None:
         if enabled:
@@ -540,6 +566,25 @@ class AssistantRuntime:
         normalized = normalize_text(text)
         return any(normalize_text(phrase) in normalized for phrase in WAKE_VARIANTS)
 
+    def strip_wake_phrase(self, text: str) -> str:
+        clean = text.strip()
+        normalized = normalize_text(clean)
+        for phrase in WAKE_VARIANTS:
+            normalized_phrase = normalize_text(phrase)
+            position = normalized.find(normalized_phrase)
+            if position < 0:
+                continue
+            words = clean.split()
+            phrase_words = len(phrase.split())
+            normalized_words = [
+                normalize_text(word).strip(" ,.!?;:-") for word in words
+            ]
+            for index in range(len(words) - phrase_words + 1):
+                candidate = " ".join(normalized_words[index : index + phrase_words])
+                if candidate == normalized_phrase:
+                    return " ".join(words[index + phrase_words :]).strip(" ,.-")
+        return clean
+
     @staticmethod
     def extract_result(raw_result: str, key: str = "text") -> str:
         try:
@@ -560,7 +605,7 @@ class AssistantRuntime:
         try:
             import winsound
 
-            winsound.Beep(880, 120)
+            winsound.Beep(880, 45)
         except (ImportError, RuntimeError):
             pass
 
@@ -680,16 +725,22 @@ class AssistantRuntime:
         audio_queue: queue.Queue[bytes] = queue.Queue(
             maxsize=voice_config.frames_for(6.0)
         )
+        preprocessor = AudioPreprocessor(voice_config.maximum_input_gain)
 
         def audio_callback(indata: bytes, frames: int, time_info: Any, status: Any):
             del frames, time_info
             if status:
                 logging.warning("Estado do microfone: %s", status)
-            normalized_audio = normalize_pcm16(
-                bytes(indata),
-                voice_config.maximum_input_gain,
-            )
+            normalized_audio, metrics = preprocessor.process(bytes(indata))
             self.update_audio_level(normalized_audio)
+            self.update_voice_diagnostics(
+                rawRms=round(metrics.raw_rms, 5),
+                processedRms=round(metrics.processed_rms, 5),
+                peak=round(metrics.peak, 5),
+                noiseFloor=round(metrics.noise_floor, 5),
+                gain=round(metrics.gain, 2),
+                clipping=round(metrics.clipping, 5),
+            )
             try:
                 audio_queue.put_nowait(normalized_audio)
             except queue.Full:
@@ -701,7 +752,7 @@ class AssistantRuntime:
 
         wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
         command_recognizer = None
-        voice_session: VoiceActivitySession | None = None
+        voice_session: TurnManager | None = None
         transcript = TranscriptAccumulator()
 
         with sd.RawInputStream(
@@ -839,16 +890,22 @@ class AssistantRuntime:
         audio_queue: queue.Queue[bytes] = queue.Queue(
             maxsize=voice_config.frames_for(10.0)
         )
+        preprocessor = AudioPreprocessor(voice_config.maximum_input_gain)
 
         def audio_callback(indata: bytes, frames: int, time_info: Any, status: Any):
             del frames, time_info
             if status:
                 logging.warning("Estado do microfone: %s", status)
-            normalized_audio = normalize_pcm16(
-                bytes(indata),
-                voice_config.maximum_input_gain,
-            )
+            normalized_audio, metrics = preprocessor.process(bytes(indata))
             self.update_audio_level(normalized_audio)
+            self.update_voice_diagnostics(
+                rawRms=round(metrics.raw_rms, 5),
+                processedRms=round(metrics.processed_rms, 5),
+                peak=round(metrics.peak, 5),
+                noiseFloor=round(metrics.noise_floor, 5),
+                gain=round(metrics.gain, 2),
+                clipping=round(metrics.clipping, 5),
+            )
             try:
                 audio_queue.put_nowait(normalized_audio)
             except queue.Full:
@@ -860,14 +917,15 @@ class AssistantRuntime:
 
         wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
         stt_session: SpeechToTextSession | None = None
-        voice_session: VoiceActivitySession | None = None
+        voice_session: TurnManager | None = None
         local_speech_ended = False
         command_started_at = 0.0
         captured_frames = 0
         realtime_partial = ""
         local_endpoint_at = 0.0
+        pre_roll = AudioPreRollBuffer(voice_config)
 
-        def reset_command_session() -> None:
+        def reset_voice_pipeline() -> None:
             nonlocal stt_session, voice_session, local_speech_ended
             nonlocal captured_frames, realtime_partial, wake_recognizer
             nonlocal local_endpoint_at
@@ -879,7 +937,16 @@ class AssistantRuntime:
             captured_frames = 0
             realtime_partial = ""
             local_endpoint_at = 0.0
+            pre_roll.clear()
             wake_recognizer = self.create_recognizer(model, sample_rate, wake=True)
+            self.update_voice_diagnostics(
+                vadState="waiting",
+                chunkCount=0,
+                bufferDurationMs=0,
+                silenceDurationMs=0,
+                speechDurationMs=0,
+            )
+            self.update_state(voiceEvent="voice.reset")
 
         with sd.RawInputStream(
             samplerate=sample_rate,
@@ -910,7 +977,7 @@ class AssistantRuntime:
                 if self.reset_recognizer.is_set():
                     self.reset_recognizer.clear()
                     self.drain_audio(audio_queue)
-                    reset_command_session()
+                    reset_voice_pipeline()
 
                 if not self.listening_enabled.is_set():
                     self.update_state(mode="paused", partial="")
@@ -924,19 +991,25 @@ class AssistantRuntime:
                     continue
 
                 if stt_session is None:
-                    if not wake_recognizer.AcceptWaveform(data):
-                        continue
-                    candidate = self.extract_result(wake_recognizer.Result())
+                    pre_roll.append(data)
+                    accepted_wake = wake_recognizer.AcceptWaveform(data)
+                    candidate = self.extract_result(
+                        wake_recognizer.Result() if accepted_wake else wake_recognizer.PartialResult(),
+                        "text" if accepted_wake else "partial",
+                    )
                     if not self.contains_wake_phrase(candidate):
                         continue
 
+                    buffered_frames = pre_roll.snapshot()
                     self.voice_metrics.activation()
-                    self.update_state(error="", mode="wake_detected", partial="")
-                    self.play_activation_sound()
-                    self.speak_feedback("Sim, pode falar.")
-                    self.drain_audio(audio_queue)
+                    self.update_state(
+                        error="",
+                        mode="wake_detected",
+                        partial="",
+                        voiceEvent="wake.detected",
+                    )
                     stt_session = stt_provider.start_session(sample_rate)
-                    voice_session = VoiceActivitySession(voice_config)
+                    voice_session = TurnManager(voice_config)
                     command_started_at = time.monotonic()
                     captured_frames = 0
                     local_speech_ended = False
@@ -952,8 +1025,18 @@ class AssistantRuntime:
                             else "vosk-local"
                         ),
                     )
+                    # Start the command pipeline before feedback. Frames around
+                    # the wake word are replayed so immediate speech is retained.
+                    for buffered_frame in buffered_frames:
+                        voice_session.accept(buffered_frame)
+                        stt_session.send_audio(buffered_frame)
+                        captured_frames += 1
+                    pre_roll.clear()
+                    self.play_activation_sound()
                     logging.info(
-                        "Wake detectada; realtime=%s.", stt_session.is_realtime
+                        "Wake detectada; realtime=%s; pre-roll=%d ms.",
+                        stt_session.is_realtime,
+                        len(buffered_frames) * voice_config.frame_duration_ms,
                     )
                     continue
 
@@ -965,6 +1048,14 @@ class AssistantRuntime:
                     voice_event = voice_session.accept(data)
                 captured_frames += 1
                 stt_session.send_audio(data)
+                self.update_voice_diagnostics(
+                    vadState=voice_event.value,
+                    vadProbability=1.0 if voice_session.last_is_speech else 0.0,
+                    chunkCount=captured_frames,
+                    bufferDurationMs=captured_frames * voice_config.frame_duration_ms,
+                    silenceDurationMs=round(voice_session.silence_seconds * 1_000),
+                    speechDurationMs=round(voice_session.elapsed_seconds * 1_000),
+                )
 
                 completed_text = ""
                 cloud_completed = False
@@ -977,6 +1068,7 @@ class AssistantRuntime:
                             self.update_state(partial=realtime_partial.strip())
                         else:
                             self.update_state(partial=stt_event.text)
+                        self.update_state(voiceEvent="transcription.partial")
                     elif stt_event.type is STTEventType.COMPLETED:
                         completed_text = stt_event.text.strip()
                         cloud_completed = bool(completed_text)
@@ -987,17 +1079,36 @@ class AssistantRuntime:
                 if voice_event is VoiceActivityEvent.START_TIMEOUT:
                     logging.info("Ativacao cancelada: nenhuma fala detectada.")
                     self.drain_audio(audio_queue)
-                    reset_command_session()
+                    reset_voice_pipeline()
                     self.update_state(mode="wake", partial="")
                     continue
 
                 if voice_event is VoiceActivityEvent.SPEECH_STARTED:
-                    self.update_state(mode="listening")
+                    self.update_state(mode="listening", voiceEvent="speech.started")
+
+                if voice_event is VoiceActivityEvent.POSSIBLE_END:
+                    self.update_state(voiceEvent="speech.possible_end")
+                    logging.debug(
+                        "Possivel fim de fala em %.0f ms; mantendo hangover.",
+                        voice_session.silence_seconds * 1_000,
+                    )
 
                 if voice_event is VoiceActivityEvent.SPEECH_ENDED:
                     local_speech_ended = True
                     local_endpoint_at = time.monotonic()
+                    self.update_state(mode="finalizing", voiceEvent="speech.ended")
                     logging.info("Endpoint local detectado; aguardando Semantic VAD.")
+
+                if (
+                    time.monotonic() - command_started_at
+                    > voice_config.watchdog_timeout
+                ):
+                    logging.error("Watchdog reiniciou um turno de voz preso.")
+                    self.voice_metrics.error()
+                    self.drain_audio(audio_queue)
+                    reset_voice_pipeline()
+                    self.update_state(mode="wake", partial="")
+                    continue
 
                 if (
                     local_speech_ended
@@ -1014,7 +1125,11 @@ class AssistantRuntime:
                 if not should_finish:
                     continue
 
-                command_text = completed_text or stt_session.local_result()
+                self.update_state(mode="transcribing")
+                command_text = self.strip_wake_phrase(
+                    completed_text or stt_session.local_result()
+                )
+                self.update_state(voiceEvent="transcription.final")
                 latency_ms = int((time.monotonic() - command_started_at) * 1_000)
                 audio_seconds = (
                     captured_frames * voice_config.frame_duration_ms / 1_000
@@ -1036,7 +1151,7 @@ class AssistantRuntime:
                     self.drain_audio(audio_queue)
                     self.update_state(mode="wake", partial="")
 
-                reset_command_session()
+                reset_voice_pipeline()
 
     def listen_forever(self) -> None:
         try:

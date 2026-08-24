@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 from array import array
+from collections import deque
 from dataclasses import dataclass, fields, replace
 from enum import Enum
 from pathlib import Path
@@ -13,13 +14,18 @@ import webrtcvad
 
 @dataclass(frozen=True)
 class VoiceActivityConfig:
-    activation_start_timeout: float = 10.0
-    speech_end_silence: float = 0.9
-    minimum_speech_duration: float = 0.09
+    activation_start_timeout: float = 12.0
+    speech_end_silence: float = 1.5
+    possible_end_silence: float = 0.3
+    minimum_speech_duration: float = 0.06
+    pre_roll_duration: float = 0.75
+    end_padding_duration: float = 0.24
+    watchdog_timeout: float = 45.0
     maximum_phrase_duration: None = None
     sample_rate: int = 16_000
     frame_duration_ms: int = 30
-    vad_aggressiveness: int = 1
+    vad_aggressiveness: int = 0
+    sensitivity_preset: str = "VERY_HIGH"
     maximum_input_gain: float = 10.0
 
     def __post_init__(self) -> None:
@@ -27,6 +33,8 @@ class VoiceActivityConfig:
             raise ValueError("activation_start_timeout deve ficar entre 1 e 30 segundos.")
         if not 0.3 <= self.speech_end_silence <= 10.0:
             raise ValueError("speech_end_silence deve ficar entre 0.3 e 10 segundos.")
+        if not 0.1 <= self.possible_end_silence < self.speech_end_silence:
+            raise ValueError("possible_end_silence deve preceder speech_end_silence.")
         if not 0.06 <= self.minimum_speech_duration <= 3.0:
             raise ValueError("minimum_speech_duration deve ficar entre 0.06 e 3 segundos.")
         if self.maximum_phrase_duration is not None:
@@ -37,8 +45,16 @@ class VoiceActivityConfig:
             raise ValueError("frame_duration_ms deve ser 10, 20 ou 30 ms.")
         if self.vad_aggressiveness not in (0, 1, 2, 3):
             raise ValueError("vad_aggressiveness deve ficar entre 0 e 3.")
+        if self.sensitivity_preset not in {"NORMAL", "HIGH", "VERY_HIGH"}:
+            raise ValueError("sensitivity_preset invalido.")
         if not 1.0 <= self.maximum_input_gain <= 20.0:
             raise ValueError("maximum_input_gain deve ficar entre 1 e 20.")
+        if not 0.3 <= self.pre_roll_duration <= 2.0:
+            raise ValueError("pre_roll_duration deve ficar entre 0.3 e 2 segundos.")
+        if not 0.0 <= self.end_padding_duration <= 1.0:
+            raise ValueError("end_padding_duration deve ficar entre 0 e 1 segundo.")
+        if not 15.0 <= self.watchdog_timeout <= 120.0:
+            raise ValueError("watchdog_timeout deve ficar entre 15 e 120 segundos.")
 
     @property
     def frame_samples(self) -> int:
@@ -99,8 +115,17 @@ class VoiceActivityEvent(Enum):
     WAITING = "waiting"
     SPEECH_STARTED = "speech_started"
     SPEECH = "speech"
+    POSSIBLE_END = "possible_end"
     SPEECH_ENDED = "speech_ended"
     START_TIMEOUT = "start_timeout"
+
+
+class TurnState(Enum):
+    WAITING = "waiting"
+    POSSIBLE_SPEECH = "possible_speech"
+    ACTIVE_SPEECH = "active_speech"
+    POSSIBLE_END = "possible_end"
+    ENDED = "ended"
 
 
 class SpeechDetector(Protocol):
@@ -147,7 +172,7 @@ class TranscriptAccumulator:
         return self.preview(final_text)
 
 
-class VoiceActivitySession:
+class TurnManager:
     def __init__(
         self,
         config: VoiceActivityConfig,
@@ -160,6 +185,9 @@ class VoiceActivitySession:
         self._elapsed_frames = 0
         self._voiced_frames = 0
         self._silent_frames = 0
+        self._possible_end_emitted = False
+        self.state = TurnState.WAITING
+        self.last_is_speech = False
 
     def accept(self, frame: bytes) -> VoiceActivityEvent:
         if self._finished:
@@ -172,14 +200,26 @@ class VoiceActivitySession:
 
         self._elapsed_frames += 1
         contains_speech = self.detector.is_speech(frame, self.config.sample_rate)
+        self.last_is_speech = contains_speech
 
         if not self.has_started:
-            self._voiced_frames = self._voiced_frames + 1 if contains_speech else 0
+            # A single VAD miss must not erase an otherwise valid quiet onset.
+            self._voiced_frames = (
+                self._voiced_frames + 1
+                if contains_speech
+                else max(0, self._voiced_frames - 1)
+            )
+            self.state = (
+                TurnState.POSSIBLE_SPEECH
+                if self._voiced_frames
+                else TurnState.WAITING
+            )
             if self._voiced_frames >= self.config.frames_for(
                 self.config.minimum_speech_duration
             ):
                 self.has_started = True
                 self._silent_frames = 0
+                self.state = TurnState.ACTIVE_SPEECH
                 return VoiceActivityEvent.SPEECH_STARTED
 
             if (
@@ -188,17 +228,112 @@ class VoiceActivitySession:
                 >= self.config.frames_for(self.config.activation_start_timeout)
             ):
                 self._finished = True
+                self.state = TurnState.ENDED
                 return VoiceActivityEvent.START_TIMEOUT
             return VoiceActivityEvent.WAITING
 
         if contains_speech:
             self._silent_frames = 0
+            self._possible_end_emitted = False
+            self.state = TurnState.ACTIVE_SPEECH
             return VoiceActivityEvent.SPEECH
 
         self._silent_frames += 1
-        if self._silent_frames >= self.config.frames_for(
-            self.config.speech_end_silence
-        ):
+        end_after = self.config.speech_end_silence + self.config.end_padding_duration
+        if self._silent_frames >= self.config.frames_for(end_after):
             self._finished = True
+            self.state = TurnState.ENDED
             return VoiceActivityEvent.SPEECH_ENDED
+        if (
+            not self._possible_end_emitted
+            and self._silent_frames
+            >= self.config.frames_for(self.config.possible_end_silence)
+        ):
+            self._possible_end_emitted = True
+            self.state = TurnState.POSSIBLE_END
+            return VoiceActivityEvent.POSSIBLE_END
         return VoiceActivityEvent.SPEECH
+
+    @property
+    def elapsed_seconds(self) -> float:
+        return self._elapsed_frames * self.config.frame_duration_ms / 1_000
+
+    @property
+    def silence_seconds(self) -> float:
+        return self._silent_frames * self.config.frame_duration_ms / 1_000
+
+
+# Compatibility for integrations that used the previous public name.
+VoiceActivitySession = TurnManager
+
+
+@dataclass(frozen=True)
+class AudioFrameMetrics:
+    raw_rms: float
+    processed_rms: float
+    peak: float
+    noise_floor: float
+    gain: float
+    clipping: float
+
+
+class AudioPreprocessor:
+    """Stateful, bounded gain control with observable signal metrics."""
+
+    def __init__(self, maximum_gain: float, target_rms: float = 0.055) -> None:
+        self.maximum_gain = maximum_gain
+        self.target_rms = target_rms
+        self.noise_floor = 0.002
+        self.gain = min(3.0, maximum_gain)
+
+    @staticmethod
+    def _levels(frame: bytes) -> tuple[float, float]:
+        samples = array("h")
+        samples.frombytes(frame)
+        if not samples:
+            return 0.0, 0.0
+        rms = math.sqrt(sum(value * value for value in samples) / len(samples)) / 32_768
+        peak = max(abs(value) for value in samples) / 32_768
+        return rms, peak
+
+    def process(self, frame: bytes) -> tuple[bytes, AudioFrameMetrics]:
+        raw_rms, raw_peak = self._levels(frame)
+        if raw_rms <= self.noise_floor * 1.8:
+            self.noise_floor = 0.98 * self.noise_floor + 0.02 * raw_rms
+
+        signal_floor = max(raw_rms, self.noise_floor * 1.35, 1 / 32_768)
+        desired_gain = min(self.maximum_gain, max(1.0, self.target_rms / signal_floor))
+        smoothing = 0.28 if desired_gain > self.gain else 0.08
+        self.gain += (desired_gain - self.gain) * smoothing
+
+        peak_limited_gain = min(self.gain, 0.92 / raw_peak) if raw_peak else self.gain
+        processed = normalize_pcm16(frame, peak_limited_gain, target_peak=0.92)
+        processed_rms, processed_peak = self._levels(processed)
+        samples = array("h")
+        samples.frombytes(processed)
+        clipped = sum(abs(value) >= 32_760 for value in samples)
+        clipping = clipped / len(samples) if samples else 0.0
+        return processed, AudioFrameMetrics(
+            raw_rms=raw_rms,
+            processed_rms=processed_rms,
+            peak=processed_peak,
+            noise_floor=self.noise_floor,
+            gain=peak_limited_gain,
+            clipping=clipping,
+        )
+
+
+class AudioPreRollBuffer:
+    def __init__(self, config: VoiceActivityConfig) -> None:
+        self._frames: deque[bytes] = deque(
+            maxlen=config.frames_for(config.pre_roll_duration)
+        )
+
+    def append(self, frame: bytes) -> None:
+        self._frames.append(frame)
+
+    def snapshot(self) -> tuple[bytes, ...]:
+        return tuple(self._frames)
+
+    def clear(self) -> None:
+        self._frames.clear()

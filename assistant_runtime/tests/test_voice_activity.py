@@ -2,6 +2,8 @@ import unittest
 from array import array
 
 from assistant_runtime.voice_activity import (
+    AudioPreprocessor,
+    AudioPreRollBuffer,
     TranscriptAccumulator,
     VoiceActivityConfig,
     VoiceActivityEvent,
@@ -21,6 +23,7 @@ class VoiceActivitySessionTests(unittest.TestCase):
         self.config = VoiceActivityConfig(
             activation_start_timeout=1.0,
             speech_end_silence=0.3,
+            possible_end_silence=0.1,
             minimum_speech_duration=0.06,
         )
         self.silence = bytes(self.config.frame_bytes)
@@ -49,14 +52,38 @@ class VoiceActivitySessionTests(unittest.TestCase):
         session.accept(self.speech)
         session.accept(self.speech)
 
-        end_frames = self.config.frames_for(self.config.speech_end_silence)
+        end_frames = self.config.frames_for(
+            self.config.speech_end_silence + self.config.end_padding_duration
+        )
         for _ in range(end_frames - 1):
-            self.assertEqual(session.accept(self.silence), VoiceActivityEvent.SPEECH)
+            self.assertNotEqual(session.accept(self.silence), VoiceActivityEvent.SPEECH_ENDED)
 
         self.assertEqual(session.accept(self.speech), VoiceActivityEvent.SPEECH)
         for _ in range(end_frames - 1):
-            self.assertEqual(session.accept(self.silence), VoiceActivityEvent.SPEECH)
+            self.assertNotEqual(session.accept(self.silence), VoiceActivityEvent.SPEECH_ENDED)
         self.assertEqual(session.accept(self.silence), VoiceActivityEvent.SPEECH_ENDED)
+
+    def test_emits_possible_end_once_and_recovers_when_speech_returns(self) -> None:
+        session = self.create_session()
+        session.accept(self.speech)
+        session.accept(self.speech)
+        events = [
+            session.accept(self.silence)
+            for _ in range(self.config.frames_for(self.config.possible_end_silence))
+        ]
+        self.assertEqual(events.count(VoiceActivityEvent.POSSIBLE_END), 1)
+        self.assertEqual(session.accept(self.speech), VoiceActivityEvent.SPEECH)
+
+    def test_default_turn_tolerates_a_one_and_a_half_second_pause(self) -> None:
+        config = VoiceActivityConfig()
+        silence = bytes(config.frame_bytes)
+        speech = bytes([1]) * config.frame_bytes
+        session = VoiceActivitySession(config, FakeDetector())
+        session.accept(speech)
+        session.accept(speech)
+        for _ in range(config.frames_for(1.5)):
+            self.assertNotEqual(session.accept(silence), VoiceActivityEvent.SPEECH_ENDED)
+        self.assertEqual(session.accept(speech), VoiceActivityEvent.SPEECH)
 
     def test_ignores_a_short_noise_burst_before_speech(self) -> None:
         session = self.create_session()
@@ -91,10 +118,11 @@ class VoiceActivitySessionTests(unittest.TestCase):
     def test_default_voice_detection_accepts_quiet_speech_quickly(self) -> None:
         config = VoiceActivityConfig()
 
-        self.assertEqual(config.vad_aggressiveness, 1)
-        self.assertEqual(config.minimum_speech_duration, 0.09)
+        self.assertEqual(config.vad_aggressiveness, 0)
+        self.assertEqual(config.sensitivity_preset, "VERY_HIGH")
+        self.assertEqual(config.minimum_speech_duration, 0.06)
         self.assertEqual(config.maximum_input_gain, 10.0)
-        self.assertEqual(config.frames_for(config.minimum_speech_duration), 3)
+        self.assertEqual(config.frames_for(config.minimum_speech_duration), 2)
 
     def test_normalizes_quiet_pcm_without_clipping(self) -> None:
         samples = array("h", [100, -200, 400, -600])
@@ -111,6 +139,37 @@ class VoiceActivitySessionTests(unittest.TestCase):
     def test_rejects_invalid_input_gain(self) -> None:
         with self.assertRaises(ValueError):
             VoiceActivityConfig(maximum_input_gain=21.0)
+
+    def test_pre_roll_keeps_only_the_latest_audio_window(self) -> None:
+        config = VoiceActivityConfig(pre_roll_duration=0.3)
+        buffer = AudioPreRollBuffer(config)
+        for value in range(config.frames_for(0.6)):
+            buffer.append(bytes([value % 256]) * config.frame_bytes)
+        snapshot = buffer.snapshot()
+        self.assertEqual(len(snapshot), config.frames_for(0.3))
+        self.assertEqual(snapshot[-1][0], config.frames_for(0.6) - 1)
+
+    def test_adaptive_preprocessor_lifts_quiet_voice_without_clipping(self) -> None:
+        preprocessor = AudioPreprocessor(maximum_gain=10.0)
+        quiet = array("h", [250, -300, 400, -450] * 120).tobytes()
+        processed, metrics = preprocessor.process(quiet)
+        self.assertGreater(metrics.processed_rms, metrics.raw_rms)
+        self.assertLessEqual(metrics.gain, 10.0)
+        self.assertEqual(metrics.clipping, 0.0)
+        self.assertNotEqual(processed, quiet)
+
+    def test_fifty_turns_reset_without_leaking_state(self) -> None:
+        for _ in range(50):
+            session = self.create_session()
+            session.accept(self.speech)
+            self.assertEqual(session.accept(self.speech), VoiceActivityEvent.SPEECH_STARTED)
+            end_frames = self.config.frames_for(
+                self.config.speech_end_silence + self.config.end_padding_duration
+            )
+            event = VoiceActivityEvent.SPEECH
+            for _ in range(end_frames):
+                event = session.accept(self.silence)
+            self.assertEqual(event, VoiceActivityEvent.SPEECH_ENDED)
 
 
 if __name__ == "__main__":

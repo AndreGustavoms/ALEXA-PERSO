@@ -25,6 +25,8 @@ type AssistantStatus =
   | 'paused'
   | 'activated'
   | 'listening'
+  | 'finalizing'
+  | 'transcribing'
   | 'processing'
   | 'executing'
   | 'confirming'
@@ -53,7 +55,15 @@ const statusContent: Record<
   },
   listening: {
     label: 'Ouvindo',
-    title: 'Estou ouvindo',
+    title: 'Ouvindo vocÃª...',
+  },
+  finalizing: {
+    label: 'Finalizando',
+    title: 'Finalizando Ã¡udio',
+  },
+  transcribing: {
+    label: 'Entendendo',
+    title: 'Entendendo...',
   },
   processing: {
     label: 'Processando',
@@ -234,6 +244,10 @@ export function VoiceAssistant() {
             backgroundMode === 'listening' ||
           isListening
         ? 'listening'
+        : backgroundMode === 'finalizing'
+          ? 'finalizing'
+        : backgroundMode === 'transcribing'
+          ? 'transcribing'
         : backgroundMode === 'processing'
           ? 'processing'
           : backgroundMode === 'executing'
@@ -652,6 +666,16 @@ export function VoiceAssistant() {
                 </select>
               </label>
               <div className="level-field"><span>Nivel de entrada</span><div className="input-level"><i style={{ width: `${Math.min(100, (backgroundState?.audioLevel ?? 0) * 180)}%` }} /></div></div>
+              {backgroundState?.voiceDiagnostics && (
+                <dl className="voice-diagnostics">
+                  <div><dt>RAW RMS</dt><dd>{backgroundState.voiceDiagnostics.rawRms.toFixed(4)}</dd></div>
+                  <div><dt>Processado</dt><dd>{backgroundState.voiceDiagnostics.processedRms.toFixed(4)}</dd></div>
+                  <div><dt>RuÃ­do</dt><dd>{backgroundState.voiceDiagnostics.noiseFloor.toFixed(4)}</dd></div>
+                  <div><dt>Ganho</dt><dd>{backgroundState.voiceDiagnostics.gain.toFixed(1)}x</dd></div>
+                  <div><dt>VAD</dt><dd>{backgroundState.voiceDiagnostics.vadState}</dd></div>
+                  <div><dt>SilÃªncio</dt><dd>{backgroundState.voiceDiagnostics.silenceDurationMs} ms</dd></div>
+                </dl>
+              )}
               <label>
                 <span>Atualizacoes</span>
                 <select value={updateChannel} onChange={(event) => setUpdateChannel(event.target.value as 'stable' | 'beta' | 'dev')}>

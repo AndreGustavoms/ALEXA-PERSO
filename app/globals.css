@@ -879,6 +879,45 @@ a:focus-visible {
   transition: width 100ms linear;
 }
 
+.voice-diagnostics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--line);
+}
+
+.voice-diagnostics div {
+  min-width: 0;
+  padding: 8px 9px;
+  background: var(--surface);
+}
+
+.voice-diagnostics dt,
+.voice-diagnostics dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-diagnostics dt {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.voice-diagnostics dd {
+  margin-top: 3px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 .setup-toggle {
   display: flex;
   align-items: center;

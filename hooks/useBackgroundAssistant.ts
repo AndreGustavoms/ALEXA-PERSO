@@ -12,6 +12,8 @@ export type BackgroundAssistantMode =
   | 'command'
   | 'activated'
   | 'listening'
+  | 'finalizing'
+  | 'transcribing'
   | 'processing'
   | 'executing'
   | 'responding'
@@ -81,6 +83,21 @@ export interface BackgroundAssistantState {
     lastProvider: string;
     estimatedCostUsd: number | null;
   };
+  voiceDiagnostics?: {
+    rawRms: number;
+    processedRms: number;
+    peak: number;
+    noiseFloor: number;
+    gain: number;
+    clipping: number;
+    vadState: string;
+    vadProbability: number;
+    chunkCount: number;
+    bufferDurationMs: number;
+    silenceDurationMs: number;
+    speechDurationMs: number;
+  };
+  voiceEvent?: string;
 }
 
 interface BackgroundInteraction {

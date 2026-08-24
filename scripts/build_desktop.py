@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -34,8 +35,11 @@ def main() -> int:
     version = validate_version()
     run(sys.executable, "assistant_runtime/create_icon.py")
     if not args.skip_web:
-        run("npm", "ci")
-        run("npm", "run", "build")
+        npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+        if not npm:
+            raise SystemExit("npm nao foi encontrado no PATH.")
+        run(npm, "ci")
+        run(npm, "run", "build")
     if not args.skip_model:
         run(sys.executable, "assistant_runtime/setup_model.py")
     env = {**os.environ, "DOKTOR_PROJECT_ROOT": str(ROOT)}
