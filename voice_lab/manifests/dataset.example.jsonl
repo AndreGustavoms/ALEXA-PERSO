@@ -1,0 +1,1 @@
+{"audio":"samples/close_youtube_001.wav","expectedText":"fecha o YouTube","intent":"CLOSE_APPLICATION","target":"youtube","condition":"NORMAL_VOICE"}

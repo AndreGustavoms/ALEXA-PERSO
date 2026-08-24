@@ -1,0 +1,15 @@
+{
+  "name": "001_baseline",
+  "description": "Configuracao de producao v1.4.3 antes dos experimentos overnight.",
+  "voiceConfig": {
+    "speech_end_silence": 1.5,
+    "possible_end_silence": 0.3,
+    "minimum_speech_duration": 0.06,
+    "pre_roll_duration": 0.75,
+    "end_padding_duration": 0.24,
+    "vad_engine": "silero",
+    "silero_threshold": 0.38,
+    "silero_release_threshold": 0.24,
+    "maximum_input_gain": 10.0
+  }
+}

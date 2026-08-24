@@ -41,5 +41,14 @@ next-env.d.ts
 /runtime/models/
 /runtime/logs/
 /runtime/config/
+/Vozes benchmark/
+/voice_lab/.venv*/
+/voice_lab/samples/*
+!/voice_lab/samples/.gitkeep
+/voice_lab/manifests/local-*.json
+/voice_lab/manifests/local-*.jsonl
+/voice_lab/results/*
+!/voice_lab/results/.gitkeep
+!/voice_lab/results/final-report.md
 __pycache__/
 *.py[cod]
