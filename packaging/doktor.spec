@@ -9,6 +9,9 @@ from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(os.environ.get("DOKTOR_PROJECT_ROOT", Path.cwd())).resolve()
 MODEL = ROOT / "runtime/models/vosk-model-small-pt-0.3"
+SILERO_MODEL = ROOT / "assistant_runtime/models/silero_vad.onnx"
+LICENSES_DIRECTORY = ROOT / "licenses"
+SILERO_LICENSE = LICENSES_DIRECTORY / "SILERO-VAD-LICENSE.txt"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 VERSION_PARTS = tuple(int(part) for part in VERSION.split("-")[0].split(".")) + (0,)
 VERSION_TUPLE = VERSION_PARTS[:4]
@@ -17,6 +20,12 @@ if not (ROOT / "dist/index.html").exists():
     raise SystemExit("Frontend ausente. Execute npm run build antes do PyInstaller.")
 if not MODEL.exists():
     raise SystemExit("Modelo Vosk ausente. Execute assistant_runtime/setup_model.py.")
+if not SILERO_MODEL.exists():
+    raise SystemExit("Modelo Silero VAD ausente em assistant_runtime/models/silero_vad.onnx.")
+if not SILERO_LICENSE.exists():
+    raise SystemExit(
+        "Aviso de licenca do Silero VAD ausente em licenses/SILERO-VAD-LICENSE.txt."
+    )
 
 if sys.platform == "win32":
     VERSION_INFO.parent.mkdir(parents=True, exist_ok=True)
